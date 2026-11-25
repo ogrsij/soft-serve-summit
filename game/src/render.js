@@ -182,48 +182,100 @@ function mixHex(a, b, t) {
   return `rgb(${c[0]},${c[1]},${c[2]})`;
 }
 
-/** Vertical pitch of one piped ring of the tower, in pixels. */
-const RING_PITCH = 19;
+/** Vertical rise of one full turn of the piped rope, in pixels. */
+const TURN_PITCH = 33;
+
+/** The warm greige every cream shadow leans toward — never a hard grey. */
+const WARM_SHADOW = '#7d6242';
+
+/** A flavour's shadow side: its own colour pulled toward warm greige. */
+function shadowOf(flavour, t) {
+  return mixHex(flavour.body, WARM_SHADOW, t);
+}
+
+/** Radius of the rope itself (its tube) at height `y`. */
+function tubeRadiusAt(y) {
+  return Math.min(21, Math.max(10.5, radiusAt(y) * 0.68));
+}
 
 /**
- * One plump piped ring of the tower: a fat rounded band with a gradient
- * body (lit on top, shaded underneath), a soft shadow cast on the ring
- * below, dimmed flanks so it feels cylindrical, and a glossy ridge where
- * the piping caught the light. Rings overlap heavily, so the stack reads
- * as squeezed-out cream, not a pile of thin discs.
+ * The tower's half-widths at height `y`: the taper, breathed on by two
+ * slow organic swells, and bulged where the rope itself passes each
+ * edge — the left edge swells half a turn after the right, so the
+ * silhouette undulates like a coil instead of a turned post.
  */
-function drawRing(ctx, cx, cy, r, flavour) {
-  const ry = Math.max(9.5, r * 0.46);
-  // The soft shadow this ring casts on the one below it: a wide, faint
-  // groove, never a hard line.
-  ctx.fillStyle = flavour.shade;
-  ctx.globalAlpha = 0.3;
-  ctx.beginPath(); ctx.ellipse(cx, cy + RING_PITCH * 0.55, r * 0.97, ry * 0.6, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.globalAlpha = 1;
-  // The body, shaded top to bottom so the ring reads round, not flat.
-  const grad = ctx.createLinearGradient(0, cy - ry, 0, cy + ry);
-  grad.addColorStop(0, mixHex(flavour.body, '#ffffff', 0.55));
-  grad.addColorStop(0.38, flavour.body);
-  grad.addColorStop(0.78, mixHex(flavour.body, flavour.shade, 0.35));
-  grad.addColorStop(1, flavour.shade);
-  ctx.fillStyle = grad;
-  ctx.beginPath(); ctx.ellipse(cx, cy, r, ry, 0, 0, Math.PI * 2); ctx.fill();
-  // Dim the flanks a touch, so the ring feels cylindrical.
-  const side = ctx.createLinearGradient(cx - r, 0, cx + r, 0);
-  side.addColorStop(0, 'rgba(96,54,20,0.20)');
-  side.addColorStop(0.22, 'rgba(96,54,20,0)');
-  side.addColorStop(0.8, 'rgba(96,54,20,0)');
-  side.addColorStop(1, 'rgba(96,54,20,0.24)');
-  ctx.fillStyle = side;
-  ctx.beginPath(); ctx.ellipse(cx, cy, r, ry, 0, 0, Math.PI * 2); ctx.fill();
-  // The piped ridge catching the light along the top of the ring.
-  ctx.strokeStyle = 'rgba(255,255,255,0.38)';
-  ctx.lineWidth = Math.max(2, r * 0.055);
+function edgeWidths(y) {
+  const phase = (Math.PI * 2 * y) / TURN_PITCH;
+  const wob = 1 + 0.045 * Math.sin(y * 0.052 + 1.7) + 0.03 * Math.sin(y * 0.021 + 0.4);
+  const base = radiusAt(y) * wob;
+  const bulge = Math.min(0.05, (tubeRadiusAt(y) * 0.17) / Math.max(1, base));
+  return {
+    l: base * (1 + bulge * Math.cos(phase - Math.PI)),
+    r: base * (1 + bulge * Math.cos(phase)),
+    mid: base,
+  };
+}
+
+/** Stroke a point list as a soft, feathered band: three widening passes. */
+function softStroke(ctx, pts, width, colour, alpha) {
+  if (pts.length < 2) return;
+  ctx.save();
   ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.ellipse(cx, cy - ry * 0.06, r * 0.92, ry * 0.84, 0, Math.PI * 1.1, Math.PI * 1.7); ctx.stroke();
-  // A glossy dab on the upper left.
-  ctx.fillStyle = 'rgba(255,255,255,0.35)';
-  ctx.beginPath(); ctx.ellipse(cx - r * 0.36, cy - ry * 0.36, r * 0.3, ry * 0.3, -0.35, 0, Math.PI * 2); ctx.fill();
+  ctx.lineJoin = 'round';
+  const passes = [[1.75, 0.2], [1.15, 0.38], [0.68, 0.62]];
+  for (const [scale, share] of passes) {
+    ctx.strokeStyle = colour;
+    ctx.globalAlpha = alpha * share;
+    ctx.lineWidth = Math.max(1, width * scale);
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length - 1; i += 1) {
+      const mx = (pts[i].x + pts[i + 1].x) / 2;
+      const my = (pts[i].y + pts[i + 1].y) / 2;
+      ctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
+    }
+    const last = pts[pts.length - 1];
+    ctx.lineTo(last.x, last.y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/**
+ * Points along one turn of the helix as it crosses the front of the
+ * tower, lifted `lift` pixels above the turn's ridge line. Across the
+ * front the rope climbs half a pitch from the right edge to the left;
+ * that diagonal flow is what makes the stack read as one continuous
+ * spiral of whipped cream instead of a pile of separate rings.
+ */
+function ridgePoints(tower, cx, topY, k, lift) {
+  const pts = [];
+  for (let i = 0; i <= 12; i += 1) {
+    const u = -1 + (i / 12) * 2;
+    const theta = Math.acos(Math.max(-1, Math.min(1, u)));
+    const y = k * TURN_PITCH + (TURN_PITCH / (Math.PI * 2)) * theta + lift;
+    pts.push({ x: cx + dxAt(tower, y) + u * edgeWidths(y).mid * 0.99, y: topY - y });
+  }
+  return pts;
+}
+
+/** The tower's outline as a Path2D, crowned with a soft dome. */
+function towerSilhouette(tower, cx, topY) {
+  const H = tower.heightPx;
+  const ys = [];
+  for (let y = 0; y <= H; y += 3) ys.push(y);
+  if (ys[ys.length - 1] < H) ys.push(H);
+  const leftPts = ys.map((y) => ({ x: cx + dxAt(tower, y) - edgeWidths(y).l, y: topY - y }));
+  const rightPts = ys.map((y) => ({ x: cx + dxAt(tower, y) + edgeWidths(y).r, y: topY - y }));
+  const path = new Path2D();
+  path.moveTo(leftPts[0].x, leftPts[0].y + 3);
+  for (const p of leftPts) path.lineTo(p.x, p.y);
+  const topAxis = cx + dxAt(tower, H);
+  const topRight = rightPts[rightPts.length - 1];
+  path.quadraticCurveTo(topAxis, topY - H - 7, topRight.x, topRight.y);
+  for (let i = rightPts.length - 1; i >= 0; i -= 1) path.lineTo(rightPts[i].x, rightPts[i].y);
+  path.closePath();
+  return path;
 }
 
 /** The curled peak at the very top: a plump teardrop with a flicked curl. */
@@ -233,7 +285,7 @@ function drawTip(ctx, cx, cy, r, flavour) {
   const grad = ctx.createLinearGradient(0, cy - h, 0, cy + 4);
   grad.addColorStop(0, mixHex(flavour.body, '#ffffff', 0.5));
   grad.addColorStop(0.55, flavour.body);
-  grad.addColorStop(1, mixHex(flavour.body, flavour.shade, 0.5));
+  grad.addColorStop(1, shadowOf(flavour, 0.34));
   ctx.fillStyle = grad;
   ctx.beginPath();
   ctx.moveTo(cx - w, cy + 4);
@@ -243,12 +295,12 @@ function drawTip(ctx, cx, cy, r, flavour) {
   ctx.quadraticCurveTo(cx, cy + w * 0.28, cx - w, cy + 4);
   ctx.closePath(); ctx.fill();
   // The little flick where the peak curls over.
-  ctx.strokeStyle = mixHex(flavour.body, '#ffffff', 0.35);
+  ctx.strokeStyle = mixHex(flavour.body, '#ffffff', 0.28);
   ctx.lineWidth = Math.max(3.5, r * 0.14);
   ctx.lineCap = 'round';
   ctx.beginPath(); ctx.arc(cx + w * 0.34, cy - h * 0.9, w * 0.3, Math.PI * 0.75, Math.PI * 1.95); ctx.stroke();
-  // Gloss on the peak's shoulder.
-  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  // A soft sheen on the peak's shoulder — whipped, not glossy.
+  ctx.fillStyle = 'rgba(255,255,255,0.26)';
   ctx.beginPath(); ctx.ellipse(cx - w * 0.3, cy - h * 0.42, w * 0.26, h * 0.16, -0.4, 0, Math.PI * 2); ctx.fill();
 }
 
@@ -339,18 +391,86 @@ export function drawTower(ctx, tower, flavourId, toppings, cx = CONE_X, topY = C
     ctx.translate(-cx, -topY);
   }
   if (tower.heightPx > 0) {
-    // Plump piped rings from the cone up: fat overlapping swirls, each a
-    // little narrower than the one below, crowned by one last ring, a
-    // curled peak, and — for a serve that made it — a little sparkle.
+    // One continuous piped rope, not a stack of rings: a breathing
+    // silhouette filled with the cream, then every turn of the helix
+    // shaded along its diagonal — a lit ridge, a soft fall, and a warm
+    // shadow tucked into the groove above it — crowned by a curled
+    // peak, and — for a serve that made it — a little sparkle.
     const topDx = dxAt(tower, tower.heightPx);
     const crownR = radiusAt(tower.heightPx);
     const crownY = topY - tower.heightPx;
-    const ringYs = [];
-    for (let y = 6; y < tower.heightPx; y += RING_PITCH) ringYs.push(y);
-    if (!ringYs.length || tower.heightPx - ringYs[ringYs.length - 1] > 6) ringYs.push(tower.heightPx);
-    for (const y of ringYs) {
-      drawRing(ctx, cx + dxAt(tower, y), topY - y, radiusAt(y), flavour);
+    const H = tower.heightPx;
+    const silhouette = towerSilhouette(tower, cx, topY);
+    const baseGrad = ctx.createLinearGradient(0, crownY, 0, topY);
+    baseGrad.addColorStop(0, mixHex(flavour.body, '#ffffff', 0.22));
+    baseGrad.addColorStop(0.55, flavour.body);
+    baseGrad.addColorStop(1, shadowOf(flavour, 0.14));
+    ctx.fillStyle = baseGrad;
+    ctx.fill(silhouette);
+    ctx.save();
+    ctx.clip(silhouette);
+    const turns = Math.ceil(H / TURN_PITCH) + 1;
+    for (let k = 0; k < turns; k += 1) {
+      // One plump fold of the rope: a filled band between two diagonal
+      // groove curves, graded across its whole thickness — shadowed
+      // where it tucks under the fold above, lit along its ridge, and
+      // falling into warm shadow at its underside. Filled bands, not
+      // stripes: the fold itself is the shape.
+      const lo = ridgePoints(tower, cx, topY, k, -TURN_PITCH * 0.45);
+      const hi = ridgePoints(tower, cx, topY, k, TURN_PITCH * 0.55);
+      const band = new Path2D();
+      band.moveTo(lo[0].x, lo[0].y);
+      for (let i = 1; i < lo.length - 1; i += 1) {
+        band.quadraticCurveTo(lo[i].x, lo[i].y, (lo[i].x + lo[i + 1].x) / 2, (lo[i].y + lo[i + 1].y) / 2);
+      }
+      band.lineTo(lo[lo.length - 1].x, lo[lo.length - 1].y);
+      const hir = [...hi].reverse();
+      band.lineTo(hir[0].x, hir[0].y);
+      for (let i = 1; i < hir.length - 1; i += 1) {
+        band.quadraticCurveTo(hir[i].x, hir[i].y, (hir[i].x + hir[i + 1].x) / 2, (hir[i].y + hir[i + 1].y) / 2);
+      }
+      band.lineTo(hir[hir.length - 1].x, hir[hir.length - 1].y);
+      band.closePath();
+      const mid = Math.floor(lo.length / 2);
+      const g = ctx.createLinearGradient(0, hi[mid].y, 0, lo[mid].y);
+      g.addColorStop(0, shadowOf(flavour, 0.3));
+      g.addColorStop(0.3, flavour.body);
+      g.addColorStop(0.52, mixHex(flavour.body, '#ffffff', 0.3));
+      g.addColorStop(0.78, mixHex(flavour.body, '#ffffff', 0.08));
+      g.addColorStop(1, shadowOf(flavour, 0.38));
+      ctx.fillStyle = g;
+      ctx.fill(band);
+      // The groove seam and the ridge light, feathered over the fill.
+      const tube = tubeRadiusAt(Math.min(H, k * TURN_PITCH + TURN_PITCH / 2));
+      softStroke(ctx, hi, tube * 0.7, shadowOf(flavour, 0.5), 0.3);
+      softStroke(ctx, ridgePoints(tower, cx, topY, k, 0), tube * 0.7, mixHex(flavour.body, '#ffffff', 0.55), 0.18);
     }
+    // Cylindrical light: lit from the upper left, the flanks fall away
+    // warm. The gradient spans the whole lean of the tower.
+    let boxL = Infinity;
+    let boxR = -Infinity;
+    for (let y = 0; y <= H; y += 20) {
+      const ax = cx + dxAt(tower, y);
+      boxL = Math.min(boxL, ax - radiusAt(y));
+      boxR = Math.max(boxR, ax + radiusAt(y));
+    }
+    boxL -= 8;
+    boxR += 8;
+    const cyl = ctx.createLinearGradient(boxL, 0, boxR, 0);
+    cyl.addColorStop(0, 'rgba(125,98,66,0.26)');
+    cyl.addColorStop(0.25, 'rgba(255,255,255,0.10)');
+    cyl.addColorStop(0.55, 'rgba(255,255,255,0)');
+    cyl.addColorStop(1, 'rgba(125,98,66,0.32)');
+    ctx.fillStyle = cyl;
+    ctx.fillRect(boxL, crownY - 34, boxR - boxL, H + 38);
+    // Where the cream settles onto the cone, a soft contact shadow.
+    ctx.fillStyle = shadowOf(flavour, 0.45);
+    ctx.globalAlpha = 0.2;
+    ctx.beginPath();
+    ctx.ellipse(cx + dxAt(tower, 0), topY - 1, radiusAt(0) * 0.95, 9, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.restore();
     if (tower.finished || tower.toppled) {
       drawTip(ctx, cx + topDx, crownY - crownR * 0.18, crownR, flavour);
     }
