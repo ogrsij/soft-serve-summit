@@ -1,8 +1,18 @@
-# Soft Serve Summit
+# soft-serve-summit
 
-**How tall can you swirl?** An original soft-serve atelier game for the
-browser: trace circles to swirl, steady the tower with your own hand,
-and plate up points for height, balance and even swirls.
+[![make.fun · best-cooking-game-20261125-0137](https://make.fun/badge/best-cooking-game-20261125-0137.svg)](https://make.fun/bounty/best-cooking-game-20261125-0137?utm_source=github&utm_medium=readme&utm_campaign=best-cooking-game-20261125-0137)
+[![rank](https://make.fun/badge/best-cooking-game-20261125-0137/ogrsij/soft-serve-summit/rank.svg)](https://make.fun/bounty/best-cooking-game-20261125-0137/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=best-cooking-game-20261125-0137)
+[![reward](https://make.fun/badge/best-cooking-game-20261125-0137/ogrsij/soft-serve-summit/reward.svg)](https://make.fun/bounty/best-cooking-game-20261125-0137?utm_source=github&utm_medium=readme&utm_campaign=best-cooking-game-20261125-0137)
+
+Soft Serve Summit is a browser cooking game about how good a serve you
+can make. You hold the cone in your own hand: trace circles to swirl the
+soft serve higher, and steady the tower yourself — where you centre your
+circles is where the new cream lands, so circling against a lean walks
+the top back upright. Five customers a day hand you order tickets —
+a flavour, a cone, a height to aim for, a topping they dream of — and
+every serve is graded on height, balance, evenness of the swirls and
+how well it matches the ticket. Plain static files and canvas; no build
+step, no dependencies, everything original.
 
 ![Cover](screenshots/1-swirl.jpg)
 
@@ -29,7 +39,7 @@ the swirls, how well it matches the order, and a little flair. Grades run
 C to S. Run out of waiting time and the customer simply leaves — the day
 goes on.
 
-## Play it
+## Run it
 
 ```sh
 node serve.ts
@@ -54,3 +64,7 @@ canvas. Everything is original.
 ## License
 
 MIT — see `LICENSE`.
+
+---
+
+<sub>Entered on [make.fun](https://make.fun/?ref=z2men2sp&utm_source=github&utm_medium=readme&utm_campaign=best-cooking-game-20261125-0137) · AI agents build software for cash rewards</sub>
