@@ -55,12 +55,31 @@ function drawRoom(ctx, state) {
   for (let y = 32; y < 452; y += 64) {
     ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(FIELD.width, y); ctx.stroke();
   }
-  // Window with a striped awning, left of the ticket board.
-  fillRr(ctx, 372, 66, 210, 196, 12, '#bfe6f5');
+  // Window with a striped awning, left of the ticket board. The view is
+  // clipped to the frame, and the hills are grounded on the frame's
+  // bottom edge, so nothing floats past the wood.
+  ctx.save();
+  rr(ctx, 372, 66, 210, 196, 12); ctx.clip();
+  ctx.fillStyle = '#bfe6f5';
+  ctx.fillRect(372, 66, 210, 196);
   ctx.fillStyle = '#ffe9a8';
   ctx.beginPath(); ctx.arc(430, 116, 26, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.beginPath(); ctx.ellipse(516, 104, 30, 11, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(538, 96, 20, 9, 0, 0, Math.PI * 2); ctx.fill();
+  // Hills, both feet planted on the window's bottom edge (y = 262).
+  ctx.fillStyle = '#8fce7e';
+  ctx.beginPath(); ctx.ellipse(420, 268, 110, 34, 0, Math.PI, Math.PI * 2); ctx.fill();
   ctx.fillStyle = '#a8d8a0';
-  ctx.beginPath(); ctx.ellipse(500, 238, 90, 26, 0, Math.PI, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(520, 268, 120, 44, 0, Math.PI, Math.PI * 2); ctx.fill();
+  // One small tree on the nearer hill.
+  ctx.fillStyle = '#7c4f24';
+  ctx.fillRect(488, 224, 5, 14);
+  ctx.fillStyle = '#5da85f';
+  ctx.beginPath(); ctx.arc(490, 214, 15, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(479, 224, 10, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(501, 224, 10, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
   ctx.strokeStyle = WOOD_DARK; ctx.lineWidth = 6;
   rr(ctx, 372, 66, 210, 196, 12); ctx.stroke();
   for (let i = 0; i < 5; i += 1) {
@@ -154,14 +173,110 @@ export function drawCone(ctx, coneId, cx = CONE_X, topY = CONE_TOP_Y) {
   ctx.beginPath(); ctx.ellipse(cx, FLOOR_Y, 54, 10, 0, 0, Math.PI * 2); ctx.fill();
 }
 
-/** One swirl ring of the tower: a plump ellipse with a shaded underside. */
-function drawLayer(ctx, cx, cy, r, flavour) {
+/** Blend two hex colours: t = 0 gives `a`, t = 1 gives `b`. */
+function mixHex(a, b, t) {
+  const pa = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16));
+  const pb = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16));
+  const c = pa.map((v, i) => Math.round(v + (pb[i] - v) * t));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+
+/** Vertical pitch of one piped ring of the tower, in pixels. */
+const RING_PITCH = 19;
+
+/**
+ * One plump piped ring of the tower: a fat rounded band with a gradient
+ * body (lit on top, shaded underneath), a soft shadow cast on the ring
+ * below, dimmed flanks so it feels cylindrical, and a glossy ridge where
+ * the piping caught the light. Rings overlap heavily, so the stack reads
+ * as squeezed-out cream, not a pile of thin discs.
+ */
+function drawRing(ctx, cx, cy, r, flavour) {
+  const ry = Math.max(9.5, r * 0.46);
+  // The soft shadow this ring casts on the one below it: a wide, faint
+  // groove, never a hard line.
   ctx.fillStyle = flavour.shade;
-  ctx.beginPath(); ctx.ellipse(cx, cy + 3.5, r, r * 0.34 + 3.5, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = flavour.body;
-  ctx.beginPath(); ctx.ellipse(cx, cy, r, r * 0.34, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.5)';
-  ctx.beginPath(); ctx.ellipse(cx - r * 0.34, cy - r * 0.1, r * 0.42, r * 0.13, -0.3, 0, Math.PI * 2); ctx.fill();
+  ctx.globalAlpha = 0.3;
+  ctx.beginPath(); ctx.ellipse(cx, cy + RING_PITCH * 0.55, r * 0.97, ry * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.globalAlpha = 1;
+  // The body, shaded top to bottom so the ring reads round, not flat.
+  const grad = ctx.createLinearGradient(0, cy - ry, 0, cy + ry);
+  grad.addColorStop(0, mixHex(flavour.body, '#ffffff', 0.55));
+  grad.addColorStop(0.38, flavour.body);
+  grad.addColorStop(0.78, mixHex(flavour.body, flavour.shade, 0.35));
+  grad.addColorStop(1, flavour.shade);
+  ctx.fillStyle = grad;
+  ctx.beginPath(); ctx.ellipse(cx, cy, r, ry, 0, 0, Math.PI * 2); ctx.fill();
+  // Dim the flanks a touch, so the ring feels cylindrical.
+  const side = ctx.createLinearGradient(cx - r, 0, cx + r, 0);
+  side.addColorStop(0, 'rgba(96,54,20,0.20)');
+  side.addColorStop(0.22, 'rgba(96,54,20,0)');
+  side.addColorStop(0.8, 'rgba(96,54,20,0)');
+  side.addColorStop(1, 'rgba(96,54,20,0.24)');
+  ctx.fillStyle = side;
+  ctx.beginPath(); ctx.ellipse(cx, cy, r, ry, 0, 0, Math.PI * 2); ctx.fill();
+  // The piped ridge catching the light along the top of the ring.
+  ctx.strokeStyle = 'rgba(255,255,255,0.38)';
+  ctx.lineWidth = Math.max(2, r * 0.055);
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.ellipse(cx, cy - ry * 0.06, r * 0.92, ry * 0.84, 0, Math.PI * 1.1, Math.PI * 1.7); ctx.stroke();
+  // A glossy dab on the upper left.
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.beginPath(); ctx.ellipse(cx - r * 0.36, cy - ry * 0.36, r * 0.3, ry * 0.3, -0.35, 0, Math.PI * 2); ctx.fill();
+}
+
+/** The curled peak at the very top: a plump teardrop with a flicked curl. */
+function drawTip(ctx, cx, cy, r, flavour) {
+  const w = Math.max(10, r * 0.55);
+  const h = Math.max(22, r * 1.05);
+  const grad = ctx.createLinearGradient(0, cy - h, 0, cy + 4);
+  grad.addColorStop(0, mixHex(flavour.body, '#ffffff', 0.5));
+  grad.addColorStop(0.55, flavour.body);
+  grad.addColorStop(1, mixHex(flavour.body, flavour.shade, 0.5));
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(cx - w, cy + 4);
+  ctx.quadraticCurveTo(cx - w * 0.85, cy - h * 0.7, cx + w * 0.1, cy - h * 0.92);
+  ctx.quadraticCurveTo(cx + w * 0.72, cy - h * 1.06, cx + w * 0.78, cy - h * 0.6);
+  ctx.quadraticCurveTo(cx + w * 0.9, cy - h * 0.2, cx + w, cy + 4);
+  ctx.quadraticCurveTo(cx, cy + w * 0.28, cx - w, cy + 4);
+  ctx.closePath(); ctx.fill();
+  // The little flick where the peak curls over.
+  ctx.strokeStyle = mixHex(flavour.body, '#ffffff', 0.35);
+  ctx.lineWidth = Math.max(3.5, r * 0.14);
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.arc(cx + w * 0.34, cy - h * 0.9, w * 0.3, Math.PI * 0.75, Math.PI * 1.95); ctx.stroke();
+  // Gloss on the peak's shoulder.
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.beginPath(); ctx.ellipse(cx - w * 0.3, cy - h * 0.42, w * 0.26, h * 0.16, -0.4, 0, Math.PI * 2); ctx.fill();
+}
+
+/** A tiny four-point sparkle, for finished serves. */
+function drawSparkle(ctx, x, y, s, colour) {
+  ctx.fillStyle = colour;
+  ctx.beginPath();
+  ctx.moveTo(x, y - s);
+  ctx.quadraticCurveTo(x, y, x + s, y);
+  ctx.quadraticCurveTo(x, y, x, y + s);
+  ctx.quadraticCurveTo(x, y, x - s, y);
+  ctx.quadraticCurveTo(x, y, x, y - s);
+  ctx.closePath(); ctx.fill();
+}
+
+/** The tower's centre offset at height `y`, smoothed from its layers. */
+function dxAt(tower, y) {
+  const layers = tower.layers;
+  if (!layers.length) return tower.lean || 0;
+  if (y <= layers[0].y) return layers[0].dx;
+  for (let i = 1; i < layers.length; i += 1) {
+    if (y <= layers[i].y) {
+      const a = layers[i - 1];
+      const b = layers[i];
+      const t = (y - a.y) / Math.max(1, b.y - a.y);
+      return a.dx + (b.dx - a.dx) * t;
+    }
+  }
+  return layers[layers.length - 1].dx;
 }
 
 /** Toppings, drawn at the tower's crown once chosen. */
@@ -222,27 +337,29 @@ export function drawTower(ctx, tower, flavourId, toppings, cx = CONE_X, topY = C
     ctx.rotate(dir * fall * 1.35);
     ctx.translate(-cx, -topY);
   }
-  // Bottom layer first, so higher swirls overlap the ones below.
-  for (const layer of tower.layers) {
-    drawLayer(ctx, cx + layer.dx, topY - layer.y, layer.r, flavour);
-  }
   if (tower.heightPx > 0) {
-    // The crown: one last plump swirl and, once finished, a curly tip.
-    const topDx = tower.layers.length ? tower.layers[tower.layers.length - 1].dx : 0;
+    // Plump piped rings from the cone up: fat overlapping swirls, each a
+    // little narrower than the one below, crowned by one last ring, a
+    // curled peak, and — for a serve that made it — a little sparkle.
+    const topDx = dxAt(tower, tower.heightPx);
+    const crownR = radiusAt(tower.heightPx);
     const crownY = topY - tower.heightPx;
-    drawLayer(ctx, cx + topDx, crownY, radiusAt(tower.heightPx) * 0.92, flavour);
+    const ringYs = [];
+    for (let y = 6; y < tower.heightPx; y += RING_PITCH) ringYs.push(y);
+    if (!ringYs.length || tower.heightPx - ringYs[ringYs.length - 1] > 6) ringYs.push(tower.heightPx);
+    for (const y of ringYs) {
+      drawRing(ctx, cx + dxAt(tower, y), topY - y, radiusAt(y), flavour);
+    }
     if (tower.finished || tower.toppled) {
-      ctx.strokeStyle = flavour.body; ctx.lineWidth = 7; ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.arc(cx + topDx + 5, crownY - 8, 8, Math.PI * 0.9, Math.PI * 2.15);
-      ctx.stroke();
+      drawTip(ctx, cx + topDx, crownY - crownR * 0.18, crownR, flavour);
     }
     if (toppings && toppings.length) drawToppings(ctx, toppings, cx + topDx, crownY - 6, flavour);
-    // A few flavour flecks for texture.
-    ctx.fillStyle = flavour.fleck;
-    for (let i = 0; i < tower.layers.length; i += 4) {
-      const layer = tower.layers[i];
-      ctx.fillRect(cx + layer.dx - layer.r * 0.4 + (i % 3) * 8, topY - layer.y - 1, 3, 2);
+    if (tower.finished && !tower.toppled) {
+      ctx.globalAlpha = 0.9;
+      drawSparkle(ctx, cx + topDx - crownR - 15, crownY - 14, 7, GOLD);
+      drawSparkle(ctx, cx + topDx + crownR + 17, crownY + 8, 5.5, '#ffffff');
+      drawSparkle(ctx, cx + topDx + 12, crownY - crownR - 28, 5, GOLD);
+      ctx.globalAlpha = 1;
     }
   }
   ctx.restore();
@@ -443,7 +560,7 @@ function drawNozzle(ctx, state) {
   ctx.closePath(); ctx.fill();
   if (state.holding && !state.tower.toppled) {
     // The stream of soft serve, nozzle to tower.
-    ctx.strokeStyle = FLAVOURS[state.customer.flavour].body; ctx.lineWidth = 15;
+    ctx.strokeStyle = FLAVOURS[state.customer.flavour].body; ctx.lineWidth = 17;
     ctx.beginPath(); ctx.moveTo(nx, topY - 22); ctx.lineTo(CONE_X + state.tower.lean, topY + 2); ctx.stroke();
   }
 }

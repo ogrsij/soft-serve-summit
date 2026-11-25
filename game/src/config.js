@@ -23,9 +23,10 @@ export const FLOOR_Y = 726;
 export const GROW_PER_SECOND = 58;
 /** A scoring layer is recorded every time the tower grows this many pixels. */
 export const LAYER_STEP = 7;
-/** Radius of the bottom swirl and of the tip, in pixels. */
-export const RADIUS_BASE = 47;
-export const RADIUS_TIP = 15;
+/** Radius of the bottom swirl and of the tip, in pixels. Plump on purpose:
+ * a real serve spills a little over the cone's rim. */
+export const RADIUS_BASE = 58;
+export const RADIUS_TIP = 21;
 
 /** Lean (pixels of top offset) that topples the tower, by height: taller is touchier. */
 export function toppleLimit(heightPx) {
