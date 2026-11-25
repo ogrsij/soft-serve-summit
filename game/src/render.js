@@ -5,7 +5,7 @@
 import { FIELD, INK, PAPER, CREAM, WOOD, WOOD_DARK, WALL, RED, GREEN, GOLD, PINK, CONE_X, CONE_TOP_Y, FLOOR_Y, GUIDE_X, GUIDE_Y, GUIDE_R, SHIFTS, SHIFT_ORDER } from './config.js';
 import { FLAVOURS, CONES, TOPPINGS, TOPPING_ORDER, CONE_ORDER, FLAVOUR_ORDER, HEIGHT_GOALS, TRAITS, CUSTOMER_PLAN, pxToCm } from './menu.js';
 import { radiusAt } from './tower.js';
-import { isSpinning, swirlClock } from './swirl.js';
+import { isSpinning, swirlClock, guideAlpha } from './swirl.js';
 import { SCREEN_TITLE, SCREEN_SERVE, SCREEN_TOP, SCREEN_CARD, SCREEN_OVER, STEP_CONE, STEP_FLAVOUR, STEP_SWIRL, gradeRank } from './game.js';
 
 export const LAYOUT = {
@@ -796,6 +796,8 @@ function drawNozzle(ctx, state) {
  * The swirl guide and the hand's ribbon: a dashed ring around the cone
  * to trace, arrows riding it to suggest the motion, and the fading trail
  * of where the finger has just been. A clean lap lights the ring gold.
+ * Prove three clean laps, though, and the ring and arrows fade away for
+ * the rest of the serve — the back half is flown on feel.
  * The small cross is the ring's true centre; the dot is where the
  * player's own laps are centred — when the tower leans, the dot belongs
  * on the other side, and the player can watch it walk the top back home.
@@ -805,6 +807,12 @@ function drawSwirlGuide(ctx, state) {
   const now = swirlClock();
   const spinning = isSpinning(sw, now);
   const good = spinning && sw.lastQuality >= 0.7;
+  // Only the ring and its arrows answer to the guide's fade; the cross
+  // and the lap-centre dot below are lean feedback, and they stay.
+  const alpha = guideAlpha(sw, now);
+  if (alpha > 0) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
   ctx.save();
   if (good) { ctx.shadowColor = 'rgba(242,178,52,0.9)'; ctx.shadowBlur = 15; }
   ctx.strokeStyle = good ? GOLD : 'rgba(124,79,36,0.42)';
@@ -823,6 +831,8 @@ function drawSwirlGuide(ctx, state) {
     ctx.moveTo(10, 0); ctx.lineTo(-7, -6.5); ctx.lineTo(-7, 6.5);
     ctx.closePath(); ctx.fill();
     ctx.restore();
+  }
+  ctx.restore();
   }
   // The ring's true centre, and where the player's laps are centred.
   ctx.strokeStyle = 'rgba(74,47,29,0.5)'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';

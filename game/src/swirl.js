@@ -21,6 +21,12 @@ const MIN_RADIUS = 16;
 /** One pointer event may claim at most this much turn (radians). */
 const MAX_STEP = 0.7;
 const FULL_TURN = Math.PI * 2;
+/** Roundness at or above this reads as a clean lap (the ring's gold). */
+const CLEAN_ROUNDNESS = 0.7;
+/** Clean laps after which the tracing guide fades away for the serve. */
+export const GUIDE_FADE_LAPS = 3;
+/** Seconds the guide takes to fade once the laps are proven. */
+const GUIDE_FADE_SECONDS = 0.65;
 
 /** A fresh tracker: no hand on the cone yet. */
 export function createSwirl() {
@@ -34,6 +40,10 @@ export function createSwirl() {
     samples: [],          // {x, y, cum} of this press, for the grading window
     statsAt: 0,           // cumAngle where the window was last graded
     laps: 0,              // full turns this serve
+    serveAngle: 0,        // signed radians banked this serve, across presses
+    lapMark: 0,           // serveAngle magnitude already counted into laps
+    cleanLaps: 0,         // full turns this serve whose grading read clean
+    guideFadeStart: null, // clock time the guide began to fade, if it has
     centroidX: 0,         // smoothed lap centre, px from the guide centre
     roundness: 0.8,       // smoothed lap roundness, 0..1 (neutral at first)
     lastQuality: 0,       // roundness of the freshest grading, for the glow
@@ -116,6 +126,16 @@ function gradeWindow(sw) {
   // Smooth both readings so one ragged passage cannot jerk the tower.
   sw.roundness = sw.roundness * 0.5 + roundness * 0.5;
   sw.centroidX = sw.centroidX * 0.45 + (cx - GUIDE_X) * 0.55;
+  // Count this serve's clean laps off this same full-turn grading:
+  // every time the banked turn crosses another full circle, the
+  // freshest window's roundness decides whether that lap was clean.
+  while (Math.abs(sw.serveAngle) - sw.lapMark >= FULL_TURN) {
+    sw.lapMark += FULL_TURN;
+    if (roundness >= CLEAN_ROUNDNESS) sw.cleanLaps += 1;
+  }
+  if (sw.cleanLaps >= GUIDE_FADE_LAPS && sw.guideFadeStart === null) {
+    sw.guideFadeStart = swirlClock();
+  }
 }
 
 /** The finger moves: bank its turn, and grade the window as it fills. */
@@ -148,6 +168,7 @@ export function swirlMove(sw, x, y) {
   if (d === 0 || nearCentre) return;
   sw.spin += d;
   sw.cumAngle += d;
+  sw.serveAngle += d;
   sw.totalAbs += Math.abs(d);
   sw.laps = Math.floor(sw.totalAbs / FULL_TURN);
   sw.lastSpinT = swirlClock();
@@ -168,4 +189,20 @@ export function isSpinning(sw, now) {
   if (!sw.active) return false;
   if (sw.holdPose) return true;
   return now - sw.lastSpinT < 0.3;
+}
+
+/**
+ * How visible the tracing guide still is, 1..0. The ring and its
+ * arrows are training wheels: once the hand has laid GUIDE_FADE_LAPS
+ * clean laps they fade away over a breath, and the rest of the serve
+ * is flown on feel — the centre cross and the lap-centre dot are not
+ * the guide's to take, and they stay. Gone stays gone for the serve;
+ * the next customer's fresh tracker brings the guide back.
+ */
+export function guideAlpha(sw, now) {
+  if (sw.guideFadeStart === null) return 1;
+  const t = (now - sw.guideFadeStart) / GUIDE_FADE_SECONDS;
+  if (t >= 1) return 0;
+  const s = t * t * (3 - 2 * t); // smoothstep: leaves softly, lands softly
+  return 1 - s;
 }
