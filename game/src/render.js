@@ -795,8 +795,14 @@ function drawCard(ctx, state) {
   ctx.beginPath(); ctx.arc(0, 0, 44, 0, Math.PI * 2); ctx.stroke();
   text(ctx, r.grade, 0, 4, 52, ctx.strokeStyle);
   ctx.restore();
-  text(ctx, `${r.total}`, 640, 556, 46, '#b97f10');
-  text(ctx, 'points', 640, 590, 16, '#8a6b4a', 'center', 'normal');
+  // The total, with a small "/100" riding at its lower right.
+  ctx.font = 'bold 46px "Trebuchet MS", "Segoe UI", sans-serif';
+  const totalW = ctx.measureText(`${r.total}`).width;
+  ctx.font = 'normal 20px "Trebuchet MS", "Segoe UI", sans-serif';
+  const perW = ctx.measureText('/100').width;
+  const totalCx = 640 - perW / 2;
+  text(ctx, `${r.total}`, totalCx, 556, 46, '#b97f10');
+  text(ctx, '/100', totalCx + totalW / 2 + 5, 568, 20, '#8a6b4a', 'left', 'normal');
   drawButton(ctx, LAYOUT.nextBtn, state.customerIndex >= 4 ? 'See the day' : 'Next customer', GREEN);
 }
 
@@ -827,7 +833,18 @@ function drawOver(ctx, state) {
   });
   const stars = state.totalScore >= 360 ? 3 : state.totalScore >= 260 ? 2 : 1;
   text(ctx, '★'.repeat(stars) + '☆'.repeat(3 - stars), 640, 506, 44, GOLD);
-  text(ctx, `Day total  ${state.totalScore}   ·   best grade ${state.bestGrade}`, 640, 560, 26, INK);
+  // The day total, with a small "/500" after it (five customers, 100 each).
+  const totalStr = `Day total  ${state.totalScore}`;
+  const gradeStr = `   ·   best grade ${state.bestGrade}`;
+  ctx.font = 'bold 26px "Trebuchet MS", "Segoe UI", sans-serif';
+  const totalStrW = ctx.measureText(totalStr).width;
+  const gradeStrW = ctx.measureText(gradeStr).width;
+  ctx.font = 'normal 16px "Trebuchet MS", "Segoe UI", sans-serif';
+  const per500W = ctx.measureText('/500').width;
+  const lineX = 640 - (totalStrW + per500W + 4 + gradeStrW) / 2;
+  text(ctx, totalStr, lineX, 560, 26, INK, 'left');
+  text(ctx, '/500', lineX + totalStrW + 2, 567, 16, '#8a6b4a', 'left', 'normal');
+  text(ctx, gradeStr, lineX + totalStrW + per500W + 4, 560, 26, INK, 'left');
   text(ctx, 'Thank you for swirling with us today.', 640, 606, 19, '#7c4f24', 'center', 'normal');
   drawButton(ctx, LAYOUT.againBtn, 'Open again tomorrow', GREEN);
 }
