@@ -7,7 +7,7 @@ import { createTower, finishTower, radiusAt } from './tower.js';
 import { createSwirl, swirlClock } from './swirl.js';
 import { gradeServe } from './score.js';
 import {
-  SCREEN_SERVE, SCREEN_TOP, SCREEN_CARD, SCREEN_OVER,
+  SCREEN_SERVE, SCREEN_TOP, SCREEN_CARD, SCREEN_OVER, STEP_SWIRL,
   createGame, startDay, beginCustomer,
 } from './game.js';
 
@@ -26,9 +26,13 @@ function laidTower(heightPx, wobble, phase = 0) {
 export function stageShot(state, name) {
   if (name === 'swirl') {
     startDay(state);
-    // Mimi's strawberry, mid-swirl: tall already, and the hand is caught
-    // mid-lap — guide ring lit, ribbon trailing, lap centre just off the
-    // cross, steadying the stack.
+    // Mimi's strawberry, mid-swirl: cone and flavour already picked by
+    // hand, tall already, and the hand is caught mid-lap — guide ring
+    // lit, ribbon trailing, lap centre just off the cross, steadying
+    // the stack.
+    state.selCone = 'waffle';
+    state.selFlavour = 'strawberry';
+    state.step = STEP_SWIRL;
     state.tower = laidTower(238, 7);
     state.tower.holding = true;
     const sw = createSwirl();
@@ -58,10 +62,15 @@ export function stageShot(state, name) {
     startDay(state);
     state.customerIndex = 1;
     beginCustomer(state);
-    // Ponta's grand vanilla, swirled and finished, one topping already on.
+    // Ponta's grand vanilla, swirled and finished, the toppings tray
+    // open mid-pick with the asked-for wafer already on.
+    state.selCone = 'waffle';
+    state.selFlavour = 'vanilla';
+    state.step = STEP_SWIRL;
     state.tower = laidTower(268, 5, 1.2);
     finishTower(state.tower);
     state.toppings = ['wafer'];
+    state.trayOpen = true;
     state.patience = PATIENCE_SECONDS * 0.6;
     state.screen = SCREEN_TOP;
     state.messageT = 0;
@@ -71,11 +80,18 @@ export function stageShot(state, name) {
     startDay(state);
     state.customerIndex = 2;
     beginCustomer(state);
-    // Kero's petit matcha, neat as a pin, crowned with the asked-for star.
+    // Kero's petit matcha in a cake cone, neat as a pin, crowned with
+    // the asked-for star — the ticket matched line by line.
+    state.selCone = 'cup';
+    state.selFlavour = 'matcha';
+    state.step = STEP_SWIRL;
     state.tower = laidTower(140, 2.5, 0.6);
     finishTower(state.tower);
     state.toppings = ['star'];
-    state.result = gradeServe(state.tower, state.customer, state.toppings, 0.8);
+    state.result = gradeServe(state.tower, state.customer, state.toppings, 0.8, {
+      cone: state.selCone, flavour: state.selFlavour,
+      goalCm: state.goalCm, goalBand: state.goalBand,
+    });
     state.results = [state.result];
     state.totalScore = state.result.total;
     state.bestGrade = state.result.grade;
@@ -104,7 +120,13 @@ export function stageShot(state, name) {
     state.screen = SCREEN_OVER;
     return;
   }
-  // 'title' and anything else: the title screen as it opens.
+  if (name === 'title') {
+    // The title screen, with Festival Rush picked for the day — the
+    // gold shift button shows the choice is the player's to make.
+    state.shift = 'festival';
+    return;
+  }
+  // Anything else: the title screen as it opens.
 }
 
 import { CUSTOMER_PLAN as CUSTOMER_FOR_SHOT } from './menu.js';

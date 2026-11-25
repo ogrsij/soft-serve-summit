@@ -1,14 +1,18 @@
-// Pointer and keyboard for Soft Serve Summit: the hand on the cone.
-// Pressing the field takes hold of the cone; from there, only circling
-// lays soft serve (swirl.js reads the path). Buttons still take plain
-// clicks. One geometry, shared with render.js through LAYOUT, so what
-// is drawn is exactly what is hit.
+// Pointer and keyboard for Soft Serve Summit: the hands in the shop.
+// The serve is a little run of steps — pick a cone card, tap a tank on
+// the machine, then take hold and circle (swirl.js reads the path) —
+// and the finishing tray opens and closes like a real case. Buttons
+// still take plain clicks. One geometry, shared with render.js through
+// LAYOUT, so what is drawn is exactly what is hit.
 
-import { TOPPING_ORDER } from './menu.js';
+import { TOPPING_ORDER, CONE_ORDER, FLAVOUR_ORDER } from './menu.js';
+import { SHIFT_ORDER } from './config.js';
 import { LAYOUT } from './render.js';
 import {
   SCREEN_TITLE, SCREEN_SERVE, SCREEN_TOP, SCREEN_CARD, SCREEN_OVER,
-  startDay, declareDone, toggleTopping, serveIt, nextCustomer,
+  STEP_CONE, STEP_FLAVOUR, STEP_SWIRL,
+  startDay, setShift, pickCone, pickFlavour, declareDone,
+  toggleTray, toggleTopping, serveIt, nextCustomer,
 } from './game.js';
 import { swirlBegin, swirlMove, swirlEnd } from './swirl.js';
 import { wakeAudio, toggleMute, blip } from './audio.js';
@@ -41,17 +45,46 @@ function onPress(state, x, y) {
     state.muted = toggleMute();
     return;
   }
-  if (state.screen === SCREEN_TITLE) { startDay(state); return; }
+  if (state.screen === SCREEN_TITLE) {
+    // The shift buttons choose the day; anywhere else opens the atelier.
+    for (let i = 0; i < SHIFT_ORDER.length; i += 1) {
+      if (inRect(x, y, LAYOUT.shiftBtn(i))) { setShift(state, SHIFT_ORDER[i]); return; }
+    }
+    startDay(state);
+    return;
+  }
   if (state.screen === SCREEN_SERVE) {
+    if (state.step === STEP_CONE) {
+      for (let i = 0; i < CONE_ORDER.length; i += 1) {
+        if (inRect(x, y, LAYOUT.coneBtn(i))) { pickCone(state, CONE_ORDER[i]); return; }
+      }
+      return;
+    }
+    if (state.step === STEP_FLAVOUR) {
+      // Tanks first — they are the step — then the compact cone cards,
+      // so a cone can still be re-picked before the swirling starts.
+      for (let i = 0; i < FLAVOUR_ORDER.length; i += 1) {
+        if (inRect(x, y, LAYOUT.tankBtn(i))) { pickFlavour(state, FLAVOUR_ORDER[i]); return; }
+      }
+      for (let i = 0; i < CONE_ORDER.length; i += 1) {
+        if (inRect(x, y, LAYOUT.coneMiniBtn(i))) { pickCone(state, CONE_ORDER[i]); return; }
+      }
+      return;
+    }
+    // STEP_SWIRL: the DONE button, or take hold and start circling.
     if (inRect(x, y, LAYOUT.doneBtn)) { declareDone(state); return; }
-    // Take hold of the cone: the circling starts here.
     swirlBegin(state.swirl, x, y);
     return;
   }
   if (state.screen === SCREEN_TOP) {
-    for (let i = 0; i < TOPPING_ORDER.length; i += 1) {
-      if (inRect(x, y, LAYOUT.toppingBtn(i))) { toggleTopping(state, TOPPING_ORDER[i]); return; }
+    if (state.trayOpen) {
+      for (let i = 0; i < TOPPING_ORDER.length; i += 1) {
+        if (inRect(x, y, LAYOUT.toppingBtn(i))) { toggleTopping(state, TOPPING_ORDER[i]); return; }
+      }
+      if (inRect(x, y, LAYOUT.serveBtn)) { toggleTray(state); return; }
+      return;
     }
+    if (inRect(x, y, LAYOUT.trayBtn)) { toggleTray(state); return; }
     if (inRect(x, y, LAYOUT.serveBtn)) { serveIt(state); return; }
     return;
   }
@@ -74,7 +107,7 @@ export function attachInput(canvas, state) {
   });
   canvas.addEventListener('pointermove', (event) => {
     const p = toGame(canvas, event);
-    if (state.screen === SCREEN_SERVE) swirlMove(state.swirl, p.x, p.y);
+    if (state.screen === SCREEN_SERVE && state.step === STEP_SWIRL) swirlMove(state.swirl, p.x, p.y);
   });
   const release = () => { swirlEnd(state.swirl); };
   canvas.addEventListener('pointerup', release);

@@ -21,8 +21,15 @@ step, no dependencies, everything original.
 Five customers visit your little soft serve atelier. Each hands you an
 order ticket — a flavour, a cone, a height to aim for, a topping they
 dream of, and a trait that bends the judging — and watches the waiting
-gauge while you work.
+gauge while you work. Nothing is picked for you: like a real little
+shop, you choose every part of the serve yourself.
 
+- **Pick the day's shift** on the title screen: Calm Day (long waits,
+  low goals), Regular Day, or Festival Rush (short waits, tall dreams).
+- **Pick a cone** — Waffle, Cake or Sugar — from the cards on the
+  workbench.
+- **Tap a tank** on the twirl-o-matic 3000 to choose the flavour. The
+  machine's face lights up when you get it right.
 - **Trace circles** around the cone with the mouse or a finger: the
   serve grows only while you honestly circle — holding still lays
   nothing. Rounder laps lay evener swirls.
@@ -31,13 +38,14 @@ gauge while you work.
   the tilt and walk the top back upright. The taller the tower, the
   harder it sways, and a leaning tower left alone topples.
 - **Let go** to pause and breathe; press **DONE!** when it stands right.
-- **Finish** with up to two toppings — match the ticket's request — and
-  ring the bell.
+- **Open the toppings tray**, pick up to two, close it, and ring the
+  bell to serve.
 
 Every serve is graded like a judge's card: height, balance, evenness of
-the swirls, how well it matches the order, and a little flair. Grades run
-C to S. Run out of waiting time and the customer simply leaves — the day
-goes on.
+the swirls, how close the height lands to the goal, ticket accuracy
+(the cone, flavour and topping the ticket actually asked for), and a
+little flair. Grades run C to S. Run out of waiting time and the
+customer simply leaves — the day goes on.
 
 ## Run it
 

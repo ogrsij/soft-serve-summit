@@ -2,20 +2,25 @@
 // the customers and the cards. Pure canvas, flat colours, warm light.
 // LAYOUT is shared with input.js so buttons are drawn and hit in one place.
 
-import { FIELD, INK, PAPER, CREAM, WOOD, WOOD_DARK, WALL, RED, GREEN, GOLD, PINK, CONE_X, CONE_TOP_Y, FLOOR_Y, GUIDE_X, GUIDE_Y, GUIDE_R } from './config.js';
-import { FLAVOURS, CONES, TOPPINGS, TOPPING_ORDER, HEIGHT_GOALS, TRAITS, CUSTOMER_PLAN, pxToCm } from './menu.js';
+import { FIELD, INK, PAPER, CREAM, WOOD, WOOD_DARK, WALL, RED, GREEN, GOLD, PINK, CONE_X, CONE_TOP_Y, FLOOR_Y, GUIDE_X, GUIDE_Y, GUIDE_R, SHIFTS, SHIFT_ORDER } from './config.js';
+import { FLAVOURS, CONES, TOPPINGS, TOPPING_ORDER, CONE_ORDER, FLAVOUR_ORDER, HEIGHT_GOALS, TRAITS, CUSTOMER_PLAN, pxToCm } from './menu.js';
 import { radiusAt } from './tower.js';
 import { isSpinning, swirlClock } from './swirl.js';
-import { SCREEN_TITLE, SCREEN_SERVE, SCREEN_TOP, SCREEN_CARD, SCREEN_OVER, gradeRank } from './game.js';
-import { PATIENCE_SECONDS } from './config.js';
+import { SCREEN_TITLE, SCREEN_SERVE, SCREEN_TOP, SCREEN_CARD, SCREEN_OVER, STEP_CONE, STEP_FLAVOUR, STEP_SWIRL, gradeRank } from './game.js';
 
 export const LAYOUT = {
   doneBtn: { x: 520, y: 726, w: 240, h: 56 },
   serveBtn: { x: 1000, y: 714, w: 224, h: 56 },
+  trayBtn: { x: 250, y: 714, w: 230, h: 56 },
   nextBtn: { x: 520, y: 664, w: 240, h: 54 },
   againBtn: { x: 520, y: 690, w: 240, h: 54 },
   muteBtn: { x: 1218, y: 12, w: 46, h: 46 },
   toppingBtn: (i) => ({ x: 196 + i * 148, y: 706, w: 132, h: 62 }),
+  coneBtn: (i) => ({ x: 170 + i * 320, y: 694, w: 300, h: 92 }),
+  coneMiniBtn: (i) => ({ x: 391 + i * 170, y: 712, w: 158, h: 62 }),
+  tankBtn: (i) => ({ x: 64 + i * 50, y: 116, w: 44, h: 54 }),
+  shiftBtn: (i) => ({ x: 92 + i * 372, y: 678, w: 352, h: 44 }),
+  openBtn: { x: 470, y: 734, w: 340, h: 50 },
 };
 
 /** Rounded-rectangle path (the house style: everything is a little round). */
@@ -102,27 +107,59 @@ function drawRoom(ctx, state) {
   text(ctx, 'SOFT SERVE SUMMIT — atelier', 640, 31, 24, '#ffe9a8');
 }
 
-/** The soft serve machine: three flavour tanks, a lever, a happy face. */
+/**
+ * The soft serve machine: five flavour tanks on top — the flavour step
+ * is played right here, by tapping one — a lever, a happy face.
+ */
 function drawMachine(ctx, state) {
   const x = 52, y = 168, w = 268, h = 318;
   fillRr(ctx, x, y, w, h, 20, '#f2f0e9');
   ctx.fillStyle = '#d9d4c7';
   ctx.fillRect(x, y + h - 46, w, 46);
   fillRr(ctx, x + 18, y + 60, w - 36, 150, 14, '#fdfcf7');
-  // Tanks on top, one per flavour family colour.
-  const tanks = ['#ffc2d1', '#fff3d6', '#cfe3a8'];
-  tanks.forEach((colour, i) => {
-    fillRr(ctx, x + 22 + i * 78, y - 58, 62, 62, 10, colour);
+  // Tanks on top, one per flavour, in the machine's own colours. While
+  // the flavour step is open they pulse gold — tap me! — and the chosen
+  // one wears a steady gold ring and a tick.
+  const choosing = state.screen === SCREEN_SERVE && state.step === STEP_FLAVOUR;
+  FLAVOUR_ORDER.forEach((id, i) => {
+    const rect = LAYOUT.tankBtn(i);
+    const colour = FLAVOURS[id].body;
+    if (choosing) {
+      const pulse = 0.55 + Math.sin(state.time * 5 + i * 0.7) * 0.35;
+      ctx.save();
+      ctx.globalAlpha = pulse;
+      ctx.strokeStyle = GOLD; ctx.lineWidth = 3.5;
+      rr(ctx, rect.x - 4, rect.y - 4, rect.w + 8, rect.h + 8, 12); ctx.stroke();
+      ctx.restore();
+    }
+    fillRr(ctx, rect.x, rect.y, rect.w, rect.h, 10, colour);
     ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.fillRect(x + 30 + i * 78, y - 50, 12, 46);
+    ctx.fillRect(rect.x + 7, rect.y + 7, 9, rect.h - 16);
+    if (state.selFlavour === id) {
+      ctx.strokeStyle = GOLD; ctx.lineWidth = 4;
+      rr(ctx, rect.x - 2, rect.y - 2, rect.w + 4, rect.h + 4, 11); ctx.stroke();
+      ctx.fillStyle = GOLD;
+      ctx.beginPath(); ctx.arc(rect.x + rect.w - 4, rect.y + 2, 10, 0, Math.PI * 2); ctx.fill();
+      text(ctx, '✓', rect.x + rect.w - 4, rect.y + 3, 14, '#fff6e3');
+    }
   });
-  fillRr(ctx, x + 84, y - 74, 104, 18, 8, WOOD_DARK);
-  // Face: two eyes and a smile — the machine is pleased to see you.
+  fillRr(ctx, x + 8, y - 8, w - 16, 10, 5, '#d9d4c7');
+  // Face: two eyes and a smile — the machine is pleased to see you, and
+  // squeezes its eyes shut with joy for a moment when a flavour lands.
+  const happy = state.time < (state.happyFaceUntil || 0);
   ctx.fillStyle = INK;
-  ctx.beginPath(); ctx.arc(x + 92, y + 116, 9, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(x + 176, y + 116, 9, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = INK; ctx.lineWidth = 5;
-  ctx.beginPath(); ctx.arc(x + 134, y + 128, 26, 0.25 * Math.PI, 0.75 * Math.PI); ctx.stroke();
+  ctx.strokeStyle = INK;
+  if (happy) {
+    ctx.lineWidth = 4.5; ctx.lineCap = 'round';
+    for (const ex of [x + 92, x + 176]) {
+      ctx.beginPath(); ctx.arc(ex, y + 120, 10, Math.PI * 1.08, Math.PI * 1.92); ctx.stroke();
+    }
+  } else {
+    ctx.beginPath(); ctx.arc(x + 92, y + 116, 9, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + 176, y + 116, 9, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.arc(x + 134, y + 128, happy ? 30 : 26, 0.25 * Math.PI, 0.75 * Math.PI); ctx.stroke();
   // Lever and nozzle over the drip tray.
   fillRr(ctx, x + 196, y + 84, 16, 74, 8, '#b8b2a4');
   ctx.fillStyle = RED;
@@ -131,47 +168,114 @@ function drawMachine(ctx, state) {
   text(ctx, 'twirl-o-matic 3000', x + w / 2, y + h - 22, 17, '#8a8272');
 }
 
-/** A cone (or cup) standing in its holder at CONE_X. */
+/** The little steel stand: a post down to a base, and — while it waits
+ * empty — a ring at rim height where the cone will sit. */
+function drawStand(ctx, cx = CONE_X, postTopY = CONE_TOP_Y + 100, ringY = null) {
+  ctx.fillStyle = '#b8b2a4';
+  ctx.fillRect(cx - 6, postTopY, 12, FLOOR_Y - postTopY);
+  ctx.beginPath(); ctx.ellipse(cx, FLOOR_Y, 54, 10, 0, 0, Math.PI * 2); ctx.fill();
+  if (ringY !== null) {
+    ctx.beginPath(); ctx.ellipse(cx, ringY, 30, 8, 0, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+/** A cone (or cake cup) standing in its holder at CONE_X. */
 export function drawCone(ctx, coneId, cx = CONE_X, topY = CONE_TOP_Y) {
   const cone = CONES[coneId];
   if (coneId === 'cup') {
+    // The Cake Cone: a flat-topped wafer cup — trapezoid walls, a crisp
+    // rim, and the wafer's horizontal bake stripes.
     ctx.fillStyle = cone.body;
     ctx.beginPath();
-    ctx.moveTo(cx - 44, topY); ctx.lineTo(cx + 44, topY);
-    ctx.lineTo(cx + 34, topY + 96); ctx.lineTo(cx - 34, topY + 96);
+    ctx.moveTo(cx - 46, topY); ctx.lineTo(cx + 46, topY);
+    ctx.lineTo(cx + 32, topY + 96); ctx.lineTo(cx - 32, topY + 96);
     ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = cone.line; ctx.lineWidth = 3; ctx.stroke();
-    ctx.fillStyle = PINK;
-    ctx.fillRect(cx - 44, topY + 26, 88, 16);
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(cx - 46, topY); ctx.lineTo(cx + 46, topY);
+    ctx.lineTo(cx + 32, topY + 96); ctx.lineTo(cx - 32, topY + 96);
+    ctx.closePath(); ctx.clip();
+    ctx.strokeStyle = cone.line; ctx.lineWidth = 3;
+    for (let y = topY + 18; y < topY + 96; y += 15) {
+      ctx.beginPath(); ctx.moveTo(cx - 48, y); ctx.lineTo(cx + 48, y); ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.fillRect(cx - 46, topY, 14, 96);
+    ctx.restore();
+    ctx.fillStyle = '#f7dc9e';
+    ctx.fillRect(cx - 49, topY - 6, 98, 10);
+    ctx.strokeStyle = cone.line; ctx.lineWidth = 2.5;
+    ctx.strokeRect(cx - 49, topY - 6, 98, 10);
+    drawStand(ctx, cx, topY + 96);
     return;
   }
+  // Waffle and Sugar share the pointed body; sugar runs darker,
+  // narrower and longer, with a finer hatch.
+  const sugar = coneId === 'choc';
+  const halfW = sugar ? 38 : 46;
+  const len = sugar ? 132 : 118;
   ctx.fillStyle = cone.body;
   ctx.beginPath();
-  ctx.moveTo(cx - 46, topY); ctx.lineTo(cx + 46, topY);
-  ctx.lineTo(cx, topY + 118);
+  ctx.moveTo(cx - halfW, topY); ctx.lineTo(cx + halfW, topY);
+  ctx.lineTo(cx, topY + len);
   ctx.closePath(); ctx.fill();
   // The waffle cross-hatch, clipped to the cone so it never spills.
   ctx.save();
   ctx.beginPath();
-  ctx.moveTo(cx - 46, topY); ctx.lineTo(cx + 46, topY);
-  ctx.lineTo(cx, topY + 118);
+  ctx.moveTo(cx - halfW, topY); ctx.lineTo(cx + halfW, topY);
+  ctx.lineTo(cx, topY + len);
   ctx.closePath(); ctx.clip();
-  ctx.strokeStyle = cone.line; ctx.lineWidth = 2.5;
-  for (let i = -2; i <= 2; i += 1) {
+  ctx.strokeStyle = cone.line; ctx.lineWidth = sugar ? 2 : 2.5;
+  const step = sugar ? 15 : 20;
+  for (let i = -3; i <= 3; i += 1) {
     ctx.beginPath();
-    ctx.moveTo(cx + i * 20 - 12, topY + 8); ctx.lineTo(cx + i * 8, topY + 108);
+    ctx.moveTo(cx + i * step - 12, topY + 8); ctx.lineTo(cx + i * 8, topY + len - 10);
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(cx + i * 20 + 12, topY + 8); ctx.lineTo(cx - i * 8, topY + 108);
+    ctx.moveTo(cx + i * step + 12, topY + 8); ctx.lineTo(cx - i * 8, topY + len - 10);
     ctx.stroke();
   }
   ctx.restore();
   ctx.fillStyle = 'rgba(0,0,0,0.13)';
-  ctx.fillRect(cx - 46, topY, 92, 8);
-  // The holder: a little steel stand on the counter.
-  ctx.fillStyle = '#b8b2a4';
-  ctx.fillRect(cx - 6, topY + 118, 12, FLOOR_Y - topY - 118);
-  ctx.beginPath(); ctx.ellipse(cx, FLOOR_Y, 54, 10, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillRect(cx - halfW, topY, halfW * 2, 8);
+  drawStand(ctx, cx, topY + len);
+}
+
+/** A pocket-size cone for the choice cards: same three silhouettes. */
+function drawMiniCone(ctx, coneId, cx, topY) {
+  const cone = CONES[coneId];
+  ctx.fillStyle = cone.body;
+  if (coneId === 'cup') {
+    ctx.beginPath();
+    ctx.moveTo(cx - 23, topY); ctx.lineTo(cx + 23, topY);
+    ctx.lineTo(cx + 16, topY + 48); ctx.lineTo(cx - 16, topY + 48);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = cone.line; ctx.lineWidth = 2;
+    for (let y = topY + 12; y < topY + 48; y += 11) {
+      ctx.beginPath(); ctx.moveTo(cx - 22, y); ctx.lineTo(cx + 22, y); ctx.stroke();
+    }
+    ctx.fillStyle = '#f7dc9e';
+    ctx.fillRect(cx - 25, topY - 4, 50, 6);
+    return;
+  }
+  const sugar = coneId === 'choc';
+  const halfW = sugar ? 17 : 21;
+  const len = sugar ? 56 : 50;
+  ctx.beginPath();
+  ctx.moveTo(cx - halfW, topY); ctx.lineTo(cx + halfW, topY);
+  ctx.lineTo(cx, topY + len);
+  ctx.closePath(); ctx.fill();
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(cx - halfW, topY); ctx.lineTo(cx + halfW, topY);
+  ctx.lineTo(cx, topY + len);
+  ctx.closePath(); ctx.clip();
+  ctx.strokeStyle = cone.line; ctx.lineWidth = 1.8;
+  for (let i = -2; i <= 2; i += 1) {
+    ctx.beginPath(); ctx.moveTo(cx + i * 9 - 6, topY + 4); ctx.lineTo(cx + i * 4, topY + len - 4); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx + i * 9 + 6, topY + 4); ctx.lineTo(cx - i * 4, topY + len - 4); ctx.stroke();
+  }
+  ctx.restore();
 }
 
 /** Blend two hex colours: t = 0 gives `a`, t = 1 gives `b`. */
@@ -578,7 +682,7 @@ function drawTicket(ctx, state) {
   fillRr(ctx, x, y, w, h, 10, PAPER);
   ctx.fillStyle = RED;
   ctx.beginPath(); ctx.arc(x + w / 2, y + 12, 7, 0, Math.PI * 2); ctx.fill();
-  const mood = state.patience > PATIENCE_SECONDS * 0.5 ? 'happy' : state.patience > PATIENCE_SECONDS * 0.24 ? 'ok' : 'sad';
+  const mood = state.patience > state.patienceMax * 0.5 ? 'happy' : state.patience > state.patienceMax * 0.24 ? 'ok' : 'sad';
   drawAnimal(ctx, c.animal, x + 52, y + 66, 34, mood, state.time);
   text(ctx, c.name, x + 100, y + 48, 27, INK, 'left');
   text(ctx, `Customer ${state.customerIndex + 1} of 5`, x + 100, y + 78, 16, '#8a6b4a', 'left', 'normal');
@@ -588,14 +692,14 @@ function drawTicket(ctx, state) {
   ctx.beginPath(); ctx.ellipse(x + 34, y + 121, 11, 8, 0, 0, Math.PI * 2); ctx.fill();
   text(ctx, `${flavour.name} · ${CONES[c.cone].name}`, x + 58, y + 126, 19, INK, 'left');
   const goal = HEIGHT_GOALS[c.goal];
-  text(ctx, `Goal: ${goal.name} — ${goal.cm} cm tall`, x + 24, y + 162, 20, '#b97f10', 'left');
+  text(ctx, `Goal: ${goal.name} — ${state.goalCm} cm tall`, x + 24, y + 162, 20, '#b97f10', 'left');
   text(ctx, `…with ${TOPPINGS[c.wants].name} on top!`, x + 24, y + 192, 19, INK, 'left');
   const trait = TRAITS[c.trait];
   text(ctx, trait.name, x + 24, y + 220, 18, '#7c4f24', 'left');
   text(ctx, trait.note, x + 24, y + 242, 15.5, '#8a6b4a', 'left', 'normal');
   // The waiting gauge: it drains as the customer waits.
   fillRr(ctx, x + 22, y + h - 30, w - 44, 14, 7, '#e8dcc2');
-  const frac = Math.max(0, state.patience / PATIENCE_SECONDS);
+  const frac = Math.max(0, state.patience / state.patienceMax);
   fillRr(ctx, x + 22, y + h - 30, (w - 44) * frac, 14, 7, frac > 0.24 ? GREEN : RED);
   text(ctx, 'waiting', x + w - 24, y + h - 44, 14, '#8a6b4a', 'right', 'normal');
 }
@@ -603,9 +707,8 @@ function drawTicket(ctx, state) {
 /** The height ruler beside the cone, with the goal band lit up. */
 function drawRuler(ctx, state) {
   const x = 742;
-  const goal = HEIGHT_GOALS[state.customer.goal];
-  const bandTop = CONE_TOP_Y - (goal.cm + goal.band) * 15;
-  const bandBot = CONE_TOP_Y - Math.max(0, (goal.cm - goal.band)) * 15;
+  const bandTop = CONE_TOP_Y - (state.goalCm + state.goalBand) * 15;
+  const bandBot = CONE_TOP_Y - Math.max(0, (state.goalCm - state.goalBand)) * 15;
   ctx.fillStyle = 'rgba(93,168,95,0.35)';
   ctx.fillRect(x - 10, bandTop, 24, bandBot - bandTop);
   ctx.fillStyle = 'rgba(74,47,29,0.55)';
@@ -657,8 +760,8 @@ export function drawButton(ctx, rect, label, colour, dim = false) {
 /** Top strip: day score so far (not on the title screen), and the mute button. */
 function drawHud(ctx, state, showScore = true) {
   if (showScore) {
-    fillRr(ctx, 16, 12, 300, 46, 12, 'rgba(255,246,227,0.92)');
-    text(ctx, `Day score  ${state.totalScore}`, 34, 36, 22, INK, 'left');
+    fillRr(ctx, 16, 12, 430, 46, 12, 'rgba(255,246,227,0.92)');
+    text(ctx, `Day score  ${state.totalScore}  ·  ${SHIFTS[state.shift].name}`, 34, 36, 21, INK, 'left');
   }
   fillRr(ctx, LAYOUT.muteBtn.x, LAYOUT.muteBtn.y, LAYOUT.muteBtn.w, LAYOUT.muteBtn.h, 12, 'rgba(255,246,227,0.92)');
   text(ctx, state.muted ? '✕' : '♪', LAYOUT.muteBtn.x + 23, LAYOUT.muteBtn.y + 24, 24, INK);
@@ -684,7 +787,7 @@ function drawNozzle(ctx, state) {
   ctx.closePath(); ctx.fill();
   if (isSpinning(state.swirl, swirlClock()) && !state.tower.toppled) {
     // The stream of soft serve, nozzle to tower top.
-    ctx.strokeStyle = FLAVOURS[state.customer.flavour].body; ctx.lineWidth = 17;
+    ctx.strokeStyle = FLAVOURS[state.selFlavour || state.customer.flavour].body; ctx.lineWidth = 17;
     ctx.beginPath(); ctx.moveTo(nx, topY - 22); ctx.lineTo(CONE_X + state.tower.lean, topY + 2); ctx.stroke();
   }
 }
@@ -739,7 +842,7 @@ function drawSwirlGuide(ctx, state) {
   // The ribbon: the finger's last moments, fading as they age. A pale
   // halo under a deeper flavour tint, so the path reads both over the
   // cream it is laying and over the counter behind it.
-  const flavour = FLAVOURS[state.customer.flavour];
+  const flavour = FLAVOURS[state.selFlavour || state.customer.flavour];
   ctx.lineCap = 'round';
   for (const pass of [0, 1]) {
     for (let i = 1; i < sw.trail.length; i += 1) {
@@ -797,11 +900,60 @@ function drawToppingIcon(ctx, id, cx, cy) {
   }
 }
 
-/** The finishing tray: five topping buttons and the Serve it! bell. */
-function drawToppingTray(ctx, state) {
+/** The dark workbench strip the shop steps are played on. */
+function drawStrip(ctx) {
   ctx.fillStyle = 'rgba(46,29,18,0.82)';
   ctx.fillRect(0, 686, FIELD.width, FIELD.height - 686);
-  text(ctx, `Finish it! Pick up to 2 toppings — ${state.customer.name} asked for ${TOPPINGS[state.customer.wants].name}.`, 800, 668, 20, '#ffe9a8');
+}
+
+/**
+ * The cone step: three cards on the workbench, one per cone. In its big
+ * form it opens the serve; in its compact form it rides along under the
+ * flavour step, so a cone can still be re-picked before the swirling.
+ */
+function drawConeStrip(ctx, state, compact) {
+  drawStrip(ctx);
+  const c = state.customer;
+  if (compact) {
+    text(ctx, `Step 2 of 3 — tap a tank on the twirl-o-matic!  (Wrong cone? Tap below to change it.)`, 640, 668, 19, '#ffe9a8');
+    CONE_ORDER.forEach((id, i) => {
+      const rect = LAYOUT.coneMiniBtn(i);
+      const chosen = state.selCone === id;
+      fillRr(ctx, rect.x, rect.y, rect.w, rect.h, 12, chosen ? '#ffe1a8' : PAPER);
+      if (chosen) { ctx.strokeStyle = GOLD; ctx.lineWidth = 4; rr(ctx, rect.x, rect.y, rect.w, rect.h, 12); ctx.stroke(); }
+      drawMiniCone(ctx, id, rect.x + 30, rect.y + 8);
+      text(ctx, CONES[id].name.replace(' Cone', ''), rect.x + 58, rect.y + 31, 15.5, INK, 'left');
+    });
+    return;
+  }
+  text(ctx, `Step 1 of 3 — pick a cone! ${c.name} asked for a ${CONES[c.cone].name}.`, 640, 668, 20, '#ffe9a8');
+  CONE_ORDER.forEach((id, i) => {
+    const rect = LAYOUT.coneBtn(i);
+    const chosen = state.selCone === id;
+    fillRr(ctx, rect.x, rect.y, rect.w, rect.h, 14, chosen ? '#ffe1a8' : PAPER);
+    if (chosen) { ctx.strokeStyle = GOLD; ctx.lineWidth = 4; rr(ctx, rect.x, rect.y, rect.w, rect.h, 14); ctx.stroke(); }
+    drawMiniCone(ctx, id, rect.x + 52, rect.y + 20);
+    text(ctx, CONES[id].name, rect.x + 96, rect.y + 46, 21, INK, 'left');
+  });
+}
+
+/**
+ * The finishing strip: a Toppings button that opens the tray, the tray
+ * itself (five choices and a Done), and the Serve it! bell throughout.
+ */
+function drawFinishStrip(ctx, state) {
+  drawStrip(ctx);
+  const c = state.customer;
+  if (!state.trayOpen) {
+    const chosen = state.toppings.length
+      ? `On top: ${state.toppings.map((id) => TOPPINGS[id].name).join(' + ')}`
+      : 'No toppings yet — the tray is full of lovely things.';
+    text(ctx, `Finish it! ${chosen}`, 640, 668, 20, '#ffe9a8');
+    drawButton(ctx, LAYOUT.trayBtn, 'Toppings 🧺', '#8a5a2e');
+    drawButton(ctx, LAYOUT.serveBtn, 'Serve it! 🔔', GREEN);
+    return;
+  }
+  text(ctx, `Pick up to 2 toppings — ${c.name} asked for ${TOPPINGS[c.wants].name}.`, 800, 668, 20, '#ffe9a8');
   TOPPING_ORDER.forEach((id, i) => {
     const rect = LAYOUT.toppingBtn(i);
     const chosen = state.toppings.includes(id);
@@ -817,7 +969,7 @@ function drawToppingTray(ctx, state) {
     }
     text(ctx, TOPPINGS[id].name, rect.x + 48, rect.y + 31, labelSize, INK, 'left');
   });
-  drawButton(ctx, LAYOUT.serveBtn, 'Serve it! 🔔', GREEN);
+  drawButton(ctx, LAYOUT.serveBtn, 'Done ✔', '#8a5a2e');
 }
 
 /** A demo tower for the title screen, swaying gently on its cone. */
@@ -842,10 +994,10 @@ function drawTitle(ctx, state) {
   text(ctx, 'SOFT SERVE SUMMIT', 640, 168, 55, '#ffe9a8');
   text(ctx, 'how tall can you swirl?', 640, 214, 24, '#fff6e3', 'center', 'normal');
   const tips = [
-    ['1', 'SWIRL in circles', 'trace circles around the cone'],
-    ['2', 'STEADY the lean', 'centre your circle against it'],
-    ['3', 'MATCH the ticket', 'flavour, height goal & topping'],
-    ['4', 'TOP it & serve', 'two toppings, then ring the bell'],
+    ['1', 'PICK the order', 'a cone, then tap a tank'],
+    ['2', 'SWIRL in circles', 'trace circles around the cone'],
+    ['3', 'STEADY the lean', 'centre your circle against it'],
+    ['4', 'TOP it & serve', 'open the tray, ring the bell'],
   ];
   tips.forEach((tip, i) => {
     const x = 92 + i * 282;
@@ -856,10 +1008,21 @@ function drawTitle(ctx, state) {
     text(ctx, tip[1], x + 54, 590, 19.5, INK, 'left');
     text(ctx, tip[2], x + 20, 632, 15.5, '#7c4f24', 'left', 'normal');
   });
+  // Today's shift: three buttons, the picked one in gold.
+  SHIFT_ORDER.forEach((id, i) => {
+    const rect = LAYOUT.shiftBtn(i);
+    const chosen = state.shift === id;
+    fillRr(ctx, rect.x, rect.y + 3, rect.w, rect.h, 12, 'rgba(0,0,0,0.25)');
+    fillRr(ctx, rect.x, rect.y, rect.w, rect.h, 12, chosen ? GOLD : PAPER);
+    ctx.strokeStyle = 'rgba(74,47,29,0.5)'; ctx.lineWidth = 2.5;
+    rr(ctx, rect.x, rect.y, rect.w, rect.h, 12); ctx.stroke();
+    text(ctx, SHIFTS[id].name, rect.x + rect.w / 2, rect.y + 16, 17, INK);
+    text(ctx, SHIFTS[id].note, rect.x + rect.w / 2, rect.y + 34, 12.5, '#7c4f24', 'center', 'normal');
+  });
   const pulse = 0.85 + Math.sin(state.time * 3.2) * 0.15;
   ctx.save();
   ctx.globalAlpha = pulse;
-  drawButton(ctx, { x: 470, y: 700, w: 340, h: 58 }, 'Click to open the atelier', GREEN);
+  drawButton(ctx, LAYOUT.openBtn, 'Click to open the atelier', GREEN);
   ctx.restore();
 }
 
@@ -889,23 +1052,27 @@ function drawCard(ctx, state) {
     return;
   }
   text(ctx, `For ${c.name}: ${FLAVOURS[c.flavour].name}`, 640, 108, 27, INK);
-  // The serve itself, scaled to fit its frame.
+  // The serve itself, scaled to fit its frame — drawn as it was handed
+  // over: the cone and flavour the player actually picked.
   const scale = Math.min(1, 400 / Math.max(1, state.tower.heightPx + 150));
   ctx.save();
   ctx.translate(452, 566);
   ctx.scale(scale, scale);
   ctx.translate(-452, -566);
-  drawCone(ctx, c.cone, 452, 436);
-  drawTower(ctx, state.tower, c.flavour, state.toppings, 452, 436);
+  drawCone(ctx, state.selCone || c.cone, 452, 436);
+  drawTower(ctx, state.tower, state.selFlavour || c.flavour, state.toppings, 452, 436);
   ctx.restore();
   // The breakdown, right of the serve.
-  const bx = 486, by = 168;
-  drawBar(ctx, bx, by, 'Height', r.height, 44);
-  drawBar(ctx, bx, by + 44, 'Balance', r.balance, 33);
-  drawBar(ctx, bx, by + 88, 'Even swirls', r.uniform, 22);
-  drawBar(ctx, bx, by + 132, 'Order match', r.goal, 14);
-  drawBar(ctx, bx, by + 176, 'Flair', r.flair, 9);
-  text(ctx, `${r.cm.toFixed(1)} cm tall (goal ${r.goalCm} cm)${r.toppingHit ? ' · topping ✓' : ''}`, bx + 130, by + 232, 18, '#7c4f24', 'left', 'normal');
+  const bx = 486, by = 156;
+  drawBar(ctx, bx, by, 'Height', r.height, 40);
+  drawBar(ctx, bx, by + 40, 'Balance', r.balance, 30);
+  drawBar(ctx, bx, by + 80, 'Even swirls', r.uniform, 19);
+  drawBar(ctx, bx, by + 120, 'Height goal', r.goal, 8);
+  drawBar(ctx, bx, by + 160, 'Ticket match', r.accuracy, 10);
+  drawBar(ctx, bx, by + 200, 'Flair', r.flair, 9);
+  text(ctx, `${r.cm.toFixed(1)} cm tall (goal ${r.goalCm} cm)`, bx + 130, by + 252, 18, '#7c4f24', 'left', 'normal');
+  const mark = (hit) => (hit ? '✓' : '✗');
+  text(ctx, `Ticket: cone ${mark(r.coneHit)} · flavour ${mark(r.flavourHit)} · topping ${mark(r.toppingHit)}`, bx + 130, by + 282, 18, '#7c4f24', 'left', 'normal');
   text(ctx, verdictText(r, c), 640, 616, 19.5, INK);
   // Grade stamp and total.
   ctx.save();
@@ -930,7 +1097,8 @@ function drawCard(ctx, state) {
 function verdictText(r, c) {
   if (r.toppled) return 'It leaned, it listed… it lay down. The height was brave!';
   if (r.grade === 'S') return 'A summit of a swirl! The atelier applauds.';
-  if (r.goal >= 10) return `Right on the ticket — ${r.cm.toFixed(1)} cm against a ${r.goalCm} cm dream!`;
+  if (r.accuracy <= 3) return 'A fine swirl — but not quite the serve on the ticket.';
+  if (r.goal >= 7) return `Right on the ticket — ${r.cm.toFixed(1)} cm against a ${r.goalCm} cm dream!`;
   if (r.balance <= r.height && r.balance <= r.uniform) return 'Lovely swirl! A steadier centre would crown it.';
   if (r.uniform <= r.height) return 'Tall and proud! Rounder circles even the swirls.';
   return `${c.name} dreamed of a ${r.goalName} (${r.goalCm} cm) — closer next time!`;
@@ -980,17 +1148,26 @@ export function draw(ctx, state) {
   drawMachine(ctx, state);
   if (state.screen === SCREEN_SERVE || state.screen === SCREEN_TOP) {
     drawTicket(ctx, state);
-    drawCone(ctx, state.customer.cone);
-    drawTower(ctx, state.tower, state.customer.flavour, state.screen === SCREEN_TOP || state.tower.finished ? state.toppings : []);
+    // The cone on the stand is the one the player picked; before that,
+    // the stand waits empty with its ring showing.
+    if (state.selCone) drawCone(ctx, state.selCone);
+    else drawStand(ctx, CONE_X, CONE_TOP_Y + 100, CONE_TOP_Y + 2);
+    drawTower(ctx, state.tower, state.selFlavour || state.customer.flavour, state.screen === SCREEN_TOP || state.tower.finished ? state.toppings : []);
     if (state.screen === SCREEN_SERVE) drawNozzle(ctx, state);
     drawRuler(ctx, state);
     drawWobbleGauge(ctx, state);
     if (state.screen === SCREEN_SERVE) {
-      drawSwirlGuide(ctx, state);
-      drawButton(ctx, LAYOUT.doneBtn, 'DONE! ✔', RED, state.tower.heightPx < 24);
-      text(ctx, 'TRACE CIRCLES around the cone to swirl · centre your circle against the lean to steady it', 640, 706, 17, '#ffe9a8');
+      if (state.step === STEP_CONE) {
+        drawConeStrip(ctx, state, false);
+      } else if (state.step === STEP_FLAVOUR) {
+        drawConeStrip(ctx, state, true);
+      } else {
+        drawSwirlGuide(ctx, state);
+        drawButton(ctx, LAYOUT.doneBtn, 'DONE! ✔', RED, state.tower.heightPx < 24);
+        text(ctx, 'TRACE CIRCLES around the cone to swirl · centre your circle against the lean to steady it', 640, 706, 17, '#ffe9a8');
+      }
     } else {
-      drawToppingTray(ctx, state);
+      drawFinishStrip(ctx, state);
     }
   }
   if (state.screen === SCREEN_CARD) drawCard(ctx, state);

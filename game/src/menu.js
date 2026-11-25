@@ -12,9 +12,12 @@ export const FLAVOURS = {
 
 export const CONES = {
   waffle: { name: 'Waffle Cone',   body: '#d99a4e', line: '#b57a35' },
-  choc:   { name: 'Choco Cone',    body: '#7a4a28', line: '#5f3a20' },
-  cup:    { name: 'Paper Cup',     body: '#fdfdf8', line: '#d8d2c0' },
+  cup:    { name: 'Cake Cone',     body: '#eec27f', line: '#c99a52' },
+  choc:   { name: 'Sugar Cone',    body: '#7a4a28', line: '#5f3a20' },
 };
+/** The order the cone cards line up in, and the machine's tank order. */
+export const CONE_ORDER = ['waffle', 'cup', 'choc'];
+export const FLAVOUR_ORDER = ['strawberry', 'vanilla', 'matcha', 'chocolate', 'soda'];
 
 /** Clicked after the swirl stops; up to two, each a little flourish. */
 export const TOPPINGS = {

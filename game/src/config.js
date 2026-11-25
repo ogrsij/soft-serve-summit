@@ -47,3 +47,15 @@ export function toppleLimit(heightPx) {
 export const CUSTOMERS_PER_DAY = 5;
 /** Patience seconds a customer brings; what is left becomes the tip. */
 export const PATIENCE_SECONDS = 42;
+
+/**
+ * The day's shifts, picked on the title screen. A shift bends two dials:
+ * how long customers wait, and how tall their height goals dream.
+ * The day is always five customers and 500 points, whichever is picked.
+ */
+export const SHIFTS = {
+  calm:     { name: 'Calm Day',      patience: 58, goalScale: 0.85, note: 'long waits · low goals' },
+  regular:  { name: 'Regular Day',   patience: 42, goalScale: 1.0,  note: 'the everyday atelier' },
+  festival: { name: 'Festival Rush', patience: 30, goalScale: 1.12, note: 'short waits · tall dreams' },
+};
+export const SHIFT_ORDER = ['calm', 'regular', 'festival'];
