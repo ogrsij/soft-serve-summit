@@ -4,7 +4,7 @@
 
 import { createGame, updateGame, SCREEN_CARD, SCREEN_OVER } from './game.js';
 import { draw } from './render.js';
-import { attachInput, steerFromKeys } from './input.js';
+import { attachInput } from './input.js';
 import { startMusic, stopMusic } from './audio.js';
 import { stageShot } from './shots.js';
 
@@ -42,7 +42,6 @@ function frame(now) {
     // Screenshot scenes hold their pose; only the room's life moves.
     state.time += dt;
   } else {
-    steerFromKeys(state, dt);
     updateGame(state, dt);
     if (state.screen !== 'title' && state.screen !== SCREEN_OVER) startMusic();
     if (state.screen === SCREEN_OVER) stopMusic();

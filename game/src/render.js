@@ -2,9 +2,10 @@
 // the customers and the cards. Pure canvas, flat colours, warm light.
 // LAYOUT is shared with input.js so buttons are drawn and hit in one place.
 
-import { FIELD, INK, PAPER, CREAM, WOOD, WOOD_DARK, WALL, RED, GREEN, GOLD, PINK, CONE_X, CONE_TOP_Y, FLOOR_Y } from './config.js';
+import { FIELD, INK, PAPER, CREAM, WOOD, WOOD_DARK, WALL, RED, GREEN, GOLD, PINK, CONE_X, CONE_TOP_Y, FLOOR_Y, GUIDE_X, GUIDE_Y, GUIDE_R } from './config.js';
 import { FLAVOURS, CONES, TOPPINGS, TOPPING_ORDER, HEIGHT_GOALS, TRAITS, CUSTOMER_PLAN, pxToCm } from './menu.js';
 import { radiusAt } from './tower.js';
+import { isSpinning, swirlClock } from './swirl.js';
 import { SCREEN_TITLE, SCREEN_SERVE, SCREEN_TOP, SCREEN_CARD, SCREEN_OVER, gradeRank } from './game.js';
 import { PATIENCE_SECONDS } from './config.js';
 
@@ -547,9 +548,12 @@ function drawHud(ctx, state, showScore = true) {
   }
 }
 
-/** The nozzle arm the player steers: it hovers where the next swirl lands. */
+/**
+ * The nozzle arm: the machine never moves — the hand circles the cone
+ * beneath it. The stream flows only while the circling is honest.
+ */
 function drawNozzle(ctx, state) {
-  const nx = CONE_X + state.steer;
+  const nx = CONE_X;
   const topY = state.tower.heightPx > 0 ? CONE_TOP_Y - state.tower.heightPx : CONE_TOP_Y;
   ctx.strokeStyle = '#8a8272'; ctx.lineWidth = 10; ctx.lineCap = 'round';
   ctx.beginPath(); ctx.moveTo(nx, 58); ctx.lineTo(nx, topY - 66); ctx.stroke();
@@ -558,11 +562,79 @@ function drawNozzle(ctx, state) {
   ctx.beginPath();
   ctx.moveTo(nx - 13, topY - 44); ctx.lineTo(nx + 13, topY - 44); ctx.lineTo(nx, topY - 22);
   ctx.closePath(); ctx.fill();
-  if (state.holding && !state.tower.toppled) {
-    // The stream of soft serve, nozzle to tower.
+  if (isSpinning(state.swirl, swirlClock()) && !state.tower.toppled) {
+    // The stream of soft serve, nozzle to tower top.
     ctx.strokeStyle = FLAVOURS[state.customer.flavour].body; ctx.lineWidth = 17;
     ctx.beginPath(); ctx.moveTo(nx, topY - 22); ctx.lineTo(CONE_X + state.tower.lean, topY + 2); ctx.stroke();
   }
+}
+
+/**
+ * The swirl guide and the hand's ribbon: a dashed ring around the cone
+ * to trace, arrows riding it to suggest the motion, and the fading trail
+ * of where the finger has just been. A clean lap lights the ring gold.
+ * The small cross is the ring's true centre; the dot is where the
+ * player's own laps are centred — when the tower leans, the dot belongs
+ * on the other side, and the player can watch it walk the top back home.
+ */
+function drawSwirlGuide(ctx, state) {
+  const sw = state.swirl;
+  const now = swirlClock();
+  const spinning = isSpinning(sw, now);
+  const good = spinning && sw.lastQuality >= 0.7;
+  ctx.save();
+  if (good) { ctx.shadowColor = 'rgba(242,178,52,0.9)'; ctx.shadowBlur = 15; }
+  ctx.strokeStyle = good ? GOLD : 'rgba(124,79,36,0.42)';
+  ctx.lineWidth = good ? 5 : 3.5;
+  ctx.setLineDash([14, 10]);
+  ctx.beginPath(); ctx.arc(GUIDE_X, GUIDE_Y, GUIDE_R, 0, Math.PI * 2); ctx.stroke();
+  ctx.restore();
+  // Two arrowheads riding the ring, turning slowly with the room's life.
+  ctx.fillStyle = good ? GOLD : 'rgba(124,79,36,0.55)';
+  for (const off of [0, Math.PI]) {
+    const a = state.time * 0.9 + off;
+    ctx.save();
+    ctx.translate(GUIDE_X + Math.cos(a) * GUIDE_R, GUIDE_Y + Math.sin(a) * GUIDE_R);
+    ctx.rotate(a + Math.PI / 2);
+    ctx.beginPath();
+    ctx.moveTo(10, 0); ctx.lineTo(-7, -6.5); ctx.lineTo(-7, 6.5);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  // The ring's true centre, and where the player's laps are centred.
+  ctx.strokeStyle = 'rgba(74,47,29,0.5)'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(GUIDE_X - 7, GUIDE_Y); ctx.lineTo(GUIDE_X + 7, GUIDE_Y);
+  ctx.moveTo(GUIDE_X, GUIDE_Y - 7); ctx.lineTo(GUIDE_X, GUIDE_Y + 7);
+  ctx.stroke();
+  if (sw.laps > 0) {
+    const cx = GUIDE_X + sw.centroidX;
+    ctx.strokeStyle = 'rgba(74,47,29,0.3)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(GUIDE_X, GUIDE_Y); ctx.lineTo(cx, GUIDE_Y); ctx.stroke();
+    ctx.fillStyle = good ? GOLD : '#b57a35';
+    ctx.beginPath(); ctx.arc(cx, GUIDE_Y, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,246,227,0.9)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx, GUIDE_Y, 6, 0, Math.PI * 2); ctx.stroke();
+  }
+  // The ribbon: the finger's last moments, fading as they age. A pale
+  // halo under a deeper flavour tint, so the path reads both over the
+  // cream it is laying and over the counter behind it.
+  const flavour = FLAVOURS[state.customer.flavour];
+  ctx.lineCap = 'round';
+  for (const pass of [0, 1]) {
+    for (let i = 1; i < sw.trail.length; i += 1) {
+      const a = sw.trail[i - 1];
+      const b = sw.trail[i];
+      const age = now - b.t;
+      if (age > 1.5) continue;
+      const fade = 1 - age / 1.5;
+      ctx.strokeStyle = pass === 0 ? '#fff6e3' : flavour.shade;
+      ctx.globalAlpha = pass === 0 ? fade * 0.4 : fade * 0.85;
+      ctx.lineWidth = pass === 0 ? 11 : 6.5;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+  }
+  ctx.globalAlpha = 1;
 }
 
 /** A small topping icon for the finishing tray buttons. */
@@ -650,8 +722,8 @@ function drawTitle(ctx, state) {
   text(ctx, 'SOFT SERVE SUMMIT', 640, 168, 55, '#ffe9a8');
   text(ctx, 'how tall can you swirl?', 640, 214, 24, '#fff6e3', 'center', 'normal');
   const tips = [
-    ['1', 'HOLD to swirl', 'the serve grows while you hold'],
-    ['2', 'STEER to balance', 'mouse or ← → nudges the nozzle'],
+    ['1', 'SWIRL in circles', 'trace circles around the cone'],
+    ['2', 'STEADY the lean', 'centre your circle against it'],
     ['3', 'MATCH the ticket', 'flavour, height goal & topping'],
     ['4', 'TOP it & serve', 'two toppings, then ring the bell'],
   ];
@@ -734,7 +806,7 @@ function verdictText(r, c) {
   if (r.grade === 'S') return 'A summit of a swirl! The atelier applauds.';
   if (r.goal >= 10) return `Right on the ticket — ${r.cm.toFixed(1)} cm against a ${r.goalCm} cm dream!`;
   if (r.balance <= r.height && r.balance <= r.uniform) return 'Lovely swirl! A steadier centre would crown it.';
-  if (r.uniform <= r.height) return 'Tall and proud! Smoother steering evens the swirls.';
+  if (r.uniform <= r.height) return 'Tall and proud! Rounder circles even the swirls.';
   return `${c.name} dreamed of a ${r.goalName} (${r.goalCm} cm) — closer next time!`;
 }
 
@@ -777,8 +849,9 @@ export function draw(ctx, state) {
     drawRuler(ctx, state);
     drawWobbleGauge(ctx, state);
     if (state.screen === SCREEN_SERVE) {
+      drawSwirlGuide(ctx, state);
       drawButton(ctx, LAYOUT.doneBtn, 'DONE! ✔', RED, state.tower.heightPx < 24);
-      text(ctx, 'HOLD mouse / SPACE to swirl · steer with mouse or ← → · release to pause', 640, 706, 17, '#ffe9a8');
+      text(ctx, 'TRACE CIRCLES around the cone to swirl · centre your circle against the lean to steady it', 640, 706, 17, '#ffe9a8');
     } else {
       drawToppingTray(ctx, state);
     }

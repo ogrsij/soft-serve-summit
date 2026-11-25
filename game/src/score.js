@@ -4,7 +4,7 @@
 // A toppled tower is capped: it was tall, but it is on the floor.
 
 import { HEIGHT_GOALS, TRAITS, pxToCm } from './menu.js';
-import { leanStats, smoothness } from './tower.js';
+import { leanStats, smoothness, roundnessMean } from './tower.js';
 
 /** Grade letters by total: the atelier's stamp of approval. */
 export function gradeOf(total) {
@@ -26,13 +26,15 @@ export function gradeServe(tower, customer, toppings, patienceLeft) {
   const trait = TRAITS[customer.trait];
   const stats = leanStats(tower);
   const jerk = smoothness(tower);
+  const round = roundnessMean(tower);
 
   // Height: full marks at the Summit line, scaled down for shorter stacks.
   let height = Math.min(40, (tower.heightPx / 360) * 40);
   // Balance: a centred stack keeps its points; lean and wobble take them away.
   let balance = Math.max(0, 30 - stats.mean * 0.85 - Math.max(0, stats.worst - 18) * 0.5);
-  // Uniformity: smooth steering lays even swirls; jerky hands lay messy ones.
-  let uniform = Math.max(0, 20 - jerk * 5.2);
+  // Uniformity: the roundness of the laps that laid the swirls, with a
+  // word against centres that wandered from layer to layer.
+  let uniform = Math.max(0, 20 - (1 - round) * 17 - jerk * 3.4);
   // Order match: land inside the customer's height band for up to 10,
   // and crown it with the topping the ticket asked for, for 4 more.
   const off = Math.abs(cm - goal.cm);
@@ -77,7 +79,7 @@ export function verdictLine(result, customer) {
   const parts = [
     { key: 'height', value: result.height, text: 'A little more height next time — reach for the sky!' },
     { key: 'balance', value: result.balance, text: 'Lovely swirl! A steadier centre would crown it.' },
-    { key: 'uniform', value: result.uniform, text: 'Tall and proud! Smoother steering evens the swirls.' },
+    { key: 'uniform', value: result.uniform, text: 'Tall and proud! Rounder circles even the swirls.' },
     { key: 'goal', value: result.goal, text: `${customer.name} dreamed of a ${result.goalName} (${result.goalCm} cm).` },
   ];
   parts.sort((a, b) => a.value - b.value);

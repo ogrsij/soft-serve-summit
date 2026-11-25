@@ -2,8 +2,9 @@
 // moment with the game's own state and grading functions — a real serve at a
 // photogenic instant — so the maker's screenshots are honest renders.
 
-import { PATIENCE_SECONDS } from './config.js';
+import { PATIENCE_SECONDS, GUIDE_X, GUIDE_Y, GUIDE_R } from './config.js';
 import { createTower, finishTower, radiusAt } from './tower.js';
+import { createSwirl, swirlClock } from './swirl.js';
 import { gradeServe } from './score.js';
 import {
   SCREEN_SERVE, SCREEN_TOP, SCREEN_CARD, SCREEN_OVER,
@@ -25,11 +26,30 @@ function laidTower(heightPx, wobble, phase = 0) {
 export function stageShot(state, name) {
   if (name === 'swirl') {
     startDay(state);
-    // Mimi's strawberry, mid-swirl: tall already, swaying, nozzle streaming.
+    // Mimi's strawberry, mid-swirl: tall already, and the hand is caught
+    // mid-lap — guide ring lit, ribbon trailing, lap centre just off the
+    // cross, steadying the stack.
     state.tower = laidTower(238, 7);
     state.tower.holding = true;
-    state.holding = true;
-    state.steer = 16;
+    const sw = createSwirl();
+    const now = swirlClock();
+    const cx = GUIDE_X + 8;
+    for (let i = 0; i <= 30; i += 1) {
+      const a = -0.6 + (i / 30) * Math.PI * 1.85;
+      sw.trail.push({
+        x: cx + Math.cos(a) * GUIDE_R,
+        y: GUIDE_Y + Math.sin(a) * GUIDE_R,
+        t: now - (1 - i / 30) * 0.55,
+      });
+    }
+    sw.active = true;
+    sw.holdPose = true;
+    sw.laps = 4;
+    sw.centroidX = 8;
+    sw.roundness = 0.92;
+    sw.lastQuality = 0.92;
+    sw.lastSpinT = now;
+    state.swirl = sw;
     state.patience = PATIENCE_SECONDS * 0.72;
     state.messageT = 0;
     return;

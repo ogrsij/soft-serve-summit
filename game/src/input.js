@@ -1,18 +1,17 @@
-// Pointer and keyboard for Soft Serve Summit: hold to swirl, steer to
-// balance. One geometry, shared with render.js through LAYOUT, so what is
-// drawn is exactly what is hit.
+// Pointer and keyboard for Soft Serve Summit: the hand on the cone.
+// Pressing the field takes hold of the cone; from there, only circling
+// lays soft serve (swirl.js reads the path). Buttons still take plain
+// clicks. One geometry, shared with render.js through LAYOUT, so what
+// is drawn is exactly what is hit.
 
-import { CONE_X } from './config.js';
 import { TOPPING_ORDER } from './menu.js';
 import { LAYOUT } from './render.js';
 import {
   SCREEN_TITLE, SCREEN_SERVE, SCREEN_TOP, SCREEN_CARD, SCREEN_OVER,
   startDay, declareDone, toggleTopping, serveIt, nextCustomer,
 } from './game.js';
+import { swirlBegin, swirlMove, swirlEnd } from './swirl.js';
 import { wakeAudio, toggleMute, blip } from './audio.js';
-
-/** Keys currently held, for steering in the main loop. */
-export const keysDown = new Set();
 
 function inRect(x, y, rect) {
   return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
@@ -45,8 +44,8 @@ function onPress(state, x, y) {
   if (state.screen === SCREEN_TITLE) { startDay(state); return; }
   if (state.screen === SCREEN_SERVE) {
     if (inRect(x, y, LAYOUT.doneBtn)) { declareDone(state); return; }
-    state.holding = true;
-    state.steer = clampSteer(x);
+    // Take hold of the cone: the circling starts here.
+    swirlBegin(state.swirl, x, y);
     return;
   }
   if (state.screen === SCREEN_TOP) {
@@ -65,11 +64,6 @@ function onPress(state, x, y) {
   }
 }
 
-/** Steering is the nozzle's offset from the cone, clamped to a fair reach. */
-export function clampSteer(x) {
-  return Math.max(-120, Math.min(120, x - CONE_X));
-}
-
 /** Wire the canvas and keyboard to the game state. */
 export function attachInput(canvas, state) {
   canvas.addEventListener('pointerdown', (event) => {
@@ -80,36 +74,21 @@ export function attachInput(canvas, state) {
   });
   canvas.addEventListener('pointermove', (event) => {
     const p = toGame(canvas, event);
-    if (state.screen === SCREEN_SERVE) state.steer = clampSteer(p.x);
+    if (state.screen === SCREEN_SERVE) swirlMove(state.swirl, p.x, p.y);
   });
-  const release = () => { state.holding = false; };
+  const release = () => { swirlEnd(state.swirl); };
   canvas.addEventListener('pointerup', release);
   canvas.addEventListener('pointercancel', release);
 
   window.addEventListener('keydown', (event) => {
     if (event.repeat) return;
-    keysDown.add(event.code);
-    if (event.code === 'Space') {
-      event.preventDefault();
+    if (event.code === 'Space') event.preventDefault();
+    if (event.code === 'Space' || event.code === 'Enter') {
       wakeAudio();
-      if (state.screen === SCREEN_SERVE) state.holding = true;
-      else primaryAction(state);
+      primaryAction(state);
     }
-    if (event.code === 'Enter') primaryAction(state);
     if (event.code === 'KeyM') state.muted = toggleMute();
   });
-  window.addEventListener('keyup', (event) => {
-    keysDown.delete(event.code);
-    if (event.code === 'Space') state.holding = false;
-  });
-}
-
-/** Per-frame keyboard steering: arrows walk the nozzle, smoothly. */
-export function steerFromKeys(state, dt) {
-  if (state.screen !== SCREEN_SERVE) return;
-  const speed = 300;
-  if (keysDown.has('ArrowLeft')) state.steer = Math.max(-120, state.steer - speed * dt);
-  if (keysDown.has('ArrowRight')) state.steer = Math.min(120, state.steer + speed * dt);
 }
 
 /** A tiny click for button presses that game.js does not already voice. */

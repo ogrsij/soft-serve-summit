@@ -19,8 +19,18 @@ export const CONE_X = 640;
 export const CONE_TOP_Y = 560;
 export const FLOOR_Y = 726;
 
-/** Tower growth: pixels of height a second of holding buys. */
-export const GROW_PER_SECOND = 58;
+/**
+ * The swirl guide: the circle the player traces around the cone to lay
+ * soft serve. Its centre sits just over the cone's rim; its ring is the
+ * "clean lap" to aim for. Shifting the traced circle off this centre is
+ * how a leaning tower is talked back upright.
+ */
+export const GUIDE_X = CONE_X;
+export const GUIDE_Y = CONE_TOP_Y - 26;
+export const GUIDE_R = 84;
+
+/** Tower growth: pixels of height one radian of honest circling buys. */
+export const GROW_PER_RADIAN = 4.0;
 /** A scoring layer is recorded every time the tower grows this many pixels. */
 export const LAYER_STEP = 7;
 /** Radius of the bottom swirl and of the tip, in pixels. Plump on purpose:

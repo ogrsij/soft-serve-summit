@@ -5,6 +5,7 @@
 import { CUSTOMERS_PER_DAY, PATIENCE_SECONDS } from './config.js';
 import { CUSTOMER_PLAN, MAX_TOPPINGS } from './menu.js';
 import { createTower, updateTower, finishTower } from './tower.js';
+import { createSwirl, consumeSpin, isSpinning, swirlClock } from './swirl.js';
 import { gradeServe } from './score.js';
 import { blip, ding, coinJingle, sadSlide } from './audio.js';
 
@@ -24,8 +25,7 @@ export function createGame() {
     patience: PATIENCE_SECONDS,
     tower: createTower(),
     toppings: [],
-    steer: 0,
-    holding: false,
+    swirl: createSwirl(),
     toppleWait: 0,
     result: null,
     results: [],
@@ -52,8 +52,7 @@ export function beginCustomer(state) {
   state.tower = createTower();
   state.toppings = [];
   state.result = null;
-  state.steer = 0;
-  state.holding = false;
+  state.swirl = createSwirl();
   state.toppleWait = 0;
   state.screen = SCREEN_SERVE;
   say(state, `${state.customer.name} would love a ${state.customer.goal} serve!`, 2.4);
@@ -69,7 +68,7 @@ export function say(state, text, seconds = 1.8) {
 export function declareDone(state) {
   if (state.screen !== SCREEN_SERVE || state.tower.toppled) return;
   if (state.tower.heightPx < 24) {
-    say(state, 'A little taller first — hold to swirl!');
+    say(state, 'A little taller first — trace circles to swirl!');
     return;
   }
   finishTower(state.tower);
@@ -138,7 +137,7 @@ export function customerLeaves(state) {
   sadSlide();
 }
 
-/** Advance the world one frame; input.js sets state.holding and state.steer. */
+/** Advance the world one frame; input.js feeds state.swirl via swirl.js. */
 export function updateGame(state, dt) {
   state.time += dt;
   if (state.messageT > 0) state.messageT -= dt;
@@ -155,7 +154,13 @@ export function updateGame(state, dt) {
   }
   if (state.screen !== SCREEN_SERVE) return;
 
-  updateTower(state.tower, dt, state.holding, state.steer);
+  const drive = {
+    spinning: isSpinning(state.swirl, swirlClock()),
+    spinDelta: consumeSpin(state.swirl),
+    centroidX: state.swirl.centroidX,
+    roundness: state.swirl.roundness,
+  };
+  updateTower(state.tower, dt, drive);
 
   if (state.tower.toppled) {
     state.toppleWait += dt;
